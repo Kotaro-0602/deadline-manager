@@ -1,5 +1,6 @@
 const queries = require('../db/queries');
-const { reminderMessage } = require('../bot/templates');
+const { reminderMessage, withMention } = require('../bot/templates');
+const { triggerBackup } = require('../db/backup');
 
 async function runReminder(client) {
   // 3日前〜2日前リマインド
@@ -12,12 +13,11 @@ async function runReminder(client) {
       if (alreadySent) continue;
 
       try {
+        const text = reminderMessage('reminder_2day', project);
+        const msg = withMention(text, project.editor_name, project.editor_line_id);
         await client.pushMessage({
           to: project.editor_line_id,
-          messages: [{
-            type: 'text',
-            text: reminderMessage('reminder_2day', project),
-          }],
+          messages: [msg],
         });
         queries.createReminderLog(project.id, logType);
         console.log(`[REMINDER] ${daysAhead}day reminder sent for project #${project.id} to ${project.editor_name}`);
@@ -35,12 +35,11 @@ async function runReminder(client) {
     if (alreadySent) continue;
 
     try {
+      const text = reminderMessage('reminder_today', project);
+      const msg = withMention(text, project.editor_name, project.editor_line_id);
       await client.pushMessage({
         to: project.editor_line_id,
-        messages: [{
-          type: 'text',
-          text: reminderMessage('reminder_today', project),
-        }],
+        messages: [msg],
       });
       queries.createReminderLog(project.id, 'reminder_today');
       console.log(`[REMINDER] Today reminder sent for project #${project.id} to ${project.editor_name}`);
@@ -57,12 +56,11 @@ async function runReminder(client) {
     if (alreadySent) continue;
 
     try {
+      const text = reminderMessage('overdue', project);
+      const msg = withMention(text, project.editor_name, project.editor_line_id);
       await client.pushMessage({
         to: project.editor_line_id,
-        messages: [{
-          type: 'text',
-          text: reminderMessage('overdue', project),
-        }],
+        messages: [msg],
       });
       queries.createReminderLog(project.id, 'overdue');
       console.log(`[REMINDER] Overdue reminder sent for project #${project.id} to ${project.editor_name}`);
@@ -72,6 +70,7 @@ async function runReminder(client) {
   }
 
   console.log('[REMINDER] Daily reminder completed.');
+  triggerBackup();
 }
 
 module.exports = { runReminder };

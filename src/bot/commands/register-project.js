@@ -106,34 +106,7 @@ async function handleRegisterProject(client, event, text) {
     ],
   });
 
-  // 編集者への通知（LINE連携済みの場合）
-  if (editor.line_user_id) {
-    try {
-      await client.pushMessage({
-        to: editor.line_user_id,
-        messages: [
-          { type: 'text', text: templates.newProjectNotification(project, editorName) },
-        ],
-      });
-    } catch (err) {
-      console.error('Failed to notify editor:', err.message);
-    }
-  }
-
-  // 発注者への通知（LINE連携済みの場合）
-  if (clientRecord.line_user_id) {
-    try {
-      await client.pushMessage({
-        to: clientRecord.line_user_id,
-        messages: [{
-          type: 'text',
-          text: `📬 案件が登録されました\n─────────────\n案件名: ${project.title}\n編集者: ${editorName}\n着手日: ${dayjs(parsedStartDate).format('YYYY/MM/DD')}\n納期: ${dayjs(parsedDeadline).format('YYYY/MM/DD')}\n─────────────\n「案件確認」で進捗を確認できます。`,
-        }],
-      });
-    } catch (err) {
-      console.error('Failed to notify client:', err.message);
-    }
-  }
+  // DM通知は不要（グループ内の返信で完結）
 
   return;
 }
@@ -147,6 +120,11 @@ async function handleRegisterProject(client, event, text) {
  * 日付パターン: YYYY-MM-DD, YYYY/MM/DD, M/D, M-D
  */
 function parseRegistration(body) {
+  // 入力の正規化: 全角スラッシュ→半角、/ 前後のスペースを除去
+  const normalized = body
+    .replace(/／/g, '/')
+    .replace(/[\s　]*\/[\s　]*/g, '/');
+
   // 日付パターンの部品
   const dYMD  = '\\d{4}-\\d{1,2}-\\d{1,2}';   // YYYY-MM-DD
   const dYSD  = '\\d{4}\\/\\d{1,2}\\/\\d{1,2}'; // YYYY/MM/DD
@@ -159,7 +137,7 @@ function parseRegistration(body) {
     `^(.+?)\\/(.+?)\\/(.+?)\\/(${datePattern})\\/(${datePattern})(?:\\/(.+))?$`
   );
 
-  const m = body.match(regex);
+  const m = normalized.match(regex);
   if (m) {
     return {
       title: m[1].trim(),

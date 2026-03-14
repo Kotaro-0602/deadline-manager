@@ -1,5 +1,6 @@
 const queries = require('../db/queries');
-const { overdueAlertMessage } = require('../bot/templates');
+const { overdueAlertMessage, withMultipleMentions } = require('../bot/templates');
+const dayjs = require('dayjs');
 
 async function runAlert(client) {
   const groupId = process.env.AD_TEAM_GROUP_ID;
@@ -14,16 +15,39 @@ async function runAlert(client) {
     return;
   }
 
-  // 遅延案件をまとめて通知
+  // 遅延案件をまとめて通知（textV2メンション付き）
   let alertText = `🚨 遅延アラート（${overdueProjects.length}件）\n━━━━━━━━━━━━━━━━\n\n`;
+  const substitution = {};
+  let mentionIdx = 0;
+
   for (const project of overdueProjects) {
-    alertText += overdueAlertMessage(project) + '\n\n';
+    const daysOver = Math.floor(
+      (Date.now() - new Date(project.deadline).getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (project.editor_line_id) {
+      // textV2プレースホルダーでメンション
+      const key = `editor${mentionIdx}`;
+      alertText += `【遅延アラート】{${key}} / 案件${project.title} / 納期${dayjs(project.deadline).format('M月D日')}（${daysOver}日超過）\n\n`;
+      substitution[key] = {
+        type: 'mention',
+        mentionee: {
+          type: 'user',
+          userId: project.editor_line_id,
+        },
+      };
+      mentionIdx++;
+    } else {
+      // LINE未連携の編集者は通常表示
+      alertText += overdueAlertMessage(project) + '\n\n';
+    }
   }
 
   try {
+    const msg = withMultipleMentions(alertText.trim(), substitution);
     await client.pushMessage({
       to: groupId,
-      messages: [{ type: 'text', text: alertText.trim() }],
+      messages: [msg],
     });
     console.log(`[ALERT] Overdue alert sent to group. ${overdueProjects.length} projects.`);
   } catch (err) {

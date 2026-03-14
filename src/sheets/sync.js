@@ -6,7 +6,11 @@ const STATUS_LABELS = {
   unstarted: '未着手',
   in_progress: '作業中',
   submitted: '提出済',
+  first_draft: '初稿提出済',
   revision: '修正中',
+  revision_1: '修正1提出済',
+  revision_2: '修正2提出済',
+  revision_3: '修正3提出済',
   completed: '完了',
 };
 
@@ -64,7 +68,7 @@ async function syncAllData() {
     // === 案件一覧シート ===
     const allProjects = queries.getAllProjects();
     const projectRows = [
-      ['案件ID', '案件名', '担当編集者', '納期', 'ステータス', '備考', '登録日', '更新日', '遅延日数'],
+      ['案件ID', '案件名', '担当編集者', '発注者', '着手日', '納期', 'ステータス', '初稿提出', '修正1提出', '修正2提出', '修正3提出', '納品日', '備考', '登録日', '更新日', '遅延日数'],
     ];
 
     const today = dayjs();
@@ -73,12 +77,21 @@ async function syncAllData() {
       const isOverdue = today.isAfter(deadline, 'day') && p.status !== 'completed' && p.status !== 'submitted';
       const daysOverdue = isOverdue ? today.diff(deadline, 'day') : 0;
 
+      const fmtTs = (val) => val ? dayjs(val).format('YYYY/MM/DD HH:mm') : '';
+
       projectRows.push([
         p.id,
         p.title,
         p.editor_name || '未割当',
+        p.client_name || '',
+        p.start_date ? dayjs(p.start_date).format('YYYY/MM/DD') : '',
         dayjs(p.deadline).format('YYYY/MM/DD'),
         STATUS_LABELS[p.status] || p.status,
+        fmtTs(p.first_draft_at),
+        fmtTs(p.revision_1_at),
+        fmtTs(p.revision_2_at),
+        fmtTs(p.revision_3_at),
+        fmtTs(p.completed_at),
         p.note || '',
         dayjs(p.created_at).format('YYYY/MM/DD HH:mm'),
         dayjs(p.updated_at).format('YYYY/MM/DD HH:mm'),
@@ -189,4 +202,12 @@ async function ensureSheet(spreadsheetId, sheetName) {
   }
 }
 
-module.exports = { initSheets, syncAllData, isEnabled };
+function getSheetsClient() {
+  return sheetsClient;
+}
+
+function getSpreadsheetId() {
+  return process.env.GOOGLE_SPREADSHEET_ID;
+}
+
+module.exports = { initSheets, syncAllData, isEnabled, getSheetsClient, getSpreadsheetId, ensureSheet };

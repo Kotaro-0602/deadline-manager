@@ -194,6 +194,57 @@ function getProjectByTitlePartialAny(title) {
   `).get('%' + title + '%');
 }
 
+/**
+ * 表記ゆれを考慮したファジー案件検索
+ * 「vs」⇔「対」、大文字⇔小文字、全角⇔半角数字 等を正規化してマッチ
+ */
+function getProjectByTitleFuzzy(searchTitle) {
+  const db = getDb();
+  const projects = db.prepare(`
+    SELECT p.*, e.name as editor_name, e.line_user_id as editor_line_id,
+           c.name as client_name, c.line_user_id as client_line_id
+    FROM projects p
+    LEFT JOIN editors e ON p.editor_id = e.id
+    LEFT JOIN clients c ON p.client_id = c.id
+    WHERE p.status != 'completed'
+  `).all();
+
+  const normalize = (str) => str
+    .toLowerCase()
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/[Ａ-Ｚａ-ｚ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/対/g, 'vs')
+    .replace(/[\s　_＿\-－]/g, '')
+    .trim();
+
+  const normalizedSearch = normalize(searchTitle);
+
+  // 完全一致 → 部分一致 の順に検索
+  for (const p of projects) {
+    if (normalize(p.title) === normalizedSearch) return p;
+  }
+  for (const p of projects) {
+    if (normalize(p.title).includes(normalizedSearch) || normalizedSearch.includes(normalize(p.title))) return p;
+  }
+  return null;
+}
+
+/**
+ * 編集者のLINE IDから未完了案件を取得（1件のみ担当中なら自動特定用）
+ */
+function getActiveProjectsByEditorLineId(lineUserId) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT p.*, e.name as editor_name, e.line_user_id as editor_line_id,
+           c.name as client_name, c.line_user_id as client_line_id
+    FROM projects p
+    LEFT JOIN editors e ON p.editor_id = e.id
+    LEFT JOIN clients c ON p.client_id = c.id
+    WHERE e.line_user_id = ? AND p.status NOT IN ('completed', 'unstarted')
+    ORDER BY p.deadline ASC
+  `).all(lineUserId);
+}
+
 function getProjectByTitleAndEditorLineId(title, lineUserId) {
   const db = getDb();
   return db.prepare(`
@@ -223,6 +274,28 @@ function updateProjectStatus(projectId, status) {
   return db.prepare(
     "UPDATE projects SET status = ?, updated_at = datetime('now', 'localtime') WHERE id = ?"
   ).run(status, projectId);
+}
+
+/**
+ * 提出日時を記録する
+ * @param {number} projectId
+ * @param {string} status - first_draft, revision_1, revision_2, revision_3, completed
+ */
+function recordSubmissionTimestamp(projectId, status) {
+  const db = getDb();
+  const columnMap = {
+    'first_draft': 'first_draft_at',
+    'revision_1': 'revision_1_at',
+    'revision_2': 'revision_2_at',
+    'revision_3': 'revision_3_at',
+    'completed': 'completed_at',
+  };
+  const column = columnMap[status];
+  if (!column) return; // 対応するカラムがなければスキップ
+
+  return db.prepare(
+    `UPDATE projects SET ${column} = datetime('now', 'localtime') WHERE id = ?`
+  ).run(projectId);
 }
 
 function getCompletedProjectsThisWeek() {
@@ -291,6 +364,21 @@ function getUpcomingProjects() {
   `).all();
 }
 
+/**
+ * 着手日が今日以前で、まだ未着手の案件を取得（自動着手用）
+ */
+function getProjectsToAutoStart() {
+  const db = getDb();
+  return db.prepare(`
+    SELECT p.*, e.name as editor_name, e.line_user_id as editor_line_id
+    FROM projects p
+    LEFT JOIN editors e ON p.editor_id = e.id
+    WHERE p.start_date IS NOT NULL
+    AND p.start_date <= date('now', 'localtime')
+    AND p.status = 'unstarted'
+  `).all();
+}
+
 function getProjectsDueSoon(daysAhead) {
   const db = getDb();
   return db.prepare(`
@@ -325,14 +413,18 @@ module.exports = {
   getProjectsByEditorName,
   getProjectByTitle,
   getProjectByTitlePartialAny,
+  getProjectByTitleFuzzy,
+  getActiveProjectsByEditorLineId,
   getProjectByTitleAndEditorLineId,
   getProjectByTitlePartial,
   updateProjectStatus,
+  recordSubmissionTimestamp,
   getCompletedProjectsThisWeek,
   createReminderLog,
   getTodayReminderLog,
   getOverdueProjects,
   getTodayDeadlineProjects,
   getUpcomingProjects,
+  getProjectsToAutoStart,
   getProjectsDueSoon,
 };

@@ -3,14 +3,16 @@ const { handleDashboard } = require('./commands/dashboard');
 const { handleEditorCommand } = require('./commands/editor-commands');
 const { handleClientCommand } = require('./commands/client-commands');
 const { handleAdminCommand } = require('./commands/admin-commands');
-const { helpMessage } = require('./templates');
+const { helpMessage, withMention, withInlineMention } = require('./templates');
 const { syncAllData, isEnabled: isSheetsEnabled } = require('../sheets/sync');
+const { triggerBackup } = require('../db/backup');
 const queries = require('../db/queries');
 
-// データ変更後にスプレッドシートを非同期で同期
+// データ変更後にスプレッドシートを非同期で同期 + バックアップ
 function triggerSync() {
   if (isSheetsEnabled()) {
     setTimeout(() => syncAllData(), 1000);
+    triggerBackup();
   }
 }
 
@@ -47,18 +49,24 @@ async function handleMessage(client, event) {
   }
 
   if (text === '編集者登録' || text.startsWith('編集者登録 ')) {
-    return handleAdminCommand(client, event, 'register_editor', text);
+    const result = await handleAdminCommand(client, event, 'register_editor', text);
+    triggerSync();
+    return result;
   }
 
   // 編集者LINE連携
   if (text.startsWith('LINE連携 ') || text.startsWith('LINE連携　') ||
       text.startsWith('編集者連携 ') || text.startsWith('編集者連携　')) {
-    return handleEditorCommand(client, event, 'link', text);
+    const result = await handleEditorCommand(client, event, 'link', text);
+    triggerSync();
+    return result;
   }
 
   // 発注者LINE連携
   if (text.startsWith('発注者連携 ') || text.startsWith('発注者連携　')) {
-    return handleClientCommand(client, event, 'link', text);
+    const result = await handleClientCommand(client, event, 'link', text);
+    triggerSync();
+    return result;
   }
 
   // 発注者の案件確認
@@ -74,12 +82,6 @@ async function handleMessage(client, event) {
   // 編集者向けコマンド
   if (text === 'マイ案件') {
     return handleEditorCommand(client, event, 'my_projects');
-  }
-
-  if (text.startsWith('着手 ') || text.startsWith('着手')) {
-    const result = await handleEditorCommand(client, event, 'start', text);
-    triggerSync();
-    return result;
   }
 
   if (text.startsWith('提出 ') || text.startsWith('提出')) {
@@ -109,21 +111,25 @@ async function handleMessage(client, event) {
 }
 
 /**
- * #初稿 / #修正N + #案件名 を検出して自動ステータス更新
+ * #初稿 / #修正N / #納品 + #案件名 を検出して自動ステータス更新
  * 例: "#初稿 #ストリート転職"  → 初稿提出済
  *     "#修正1 #Claude code"  → 修正1提出済
- *     "#修正2 #Claude code"  → 修正2提出済
+ *     "#納品 #2022vs2026"    → 完了
+ *     "#納品"（案件名なし）   → 担当案件が1件なら自動特定
+ *
+ * 表記ゆれ対応: "vs"⇔"対"、全角⇔半角、大文字⇔小文字
  */
 async function handleHashtagStatus(client, event, rawText) {
   const replyToken = event.replyToken;
+  const userId = event.source.userId;
 
   // ハッシュタグを全て抽出（# と ＃ 両方対応、スペースなしの連結も対応）
   const hashtags = rawText.match(/[#＃]([^\s#＃@＠]+)/g);
-  if (!hashtags || hashtags.length < 2) return null;
+  if (!hashtags || hashtags.length === 0) return null;
 
   const tagNames = hashtags.map(tag => tag.replace(/^[#＃]/, ''));
 
-  // ステータスタグを検出（#初稿 or #修正N）
+  // ステータスタグを検出（#初稿 or #修正N or #納品）
   let newStatus = null;
   let statusLabel = null;
 
@@ -153,55 +159,71 @@ async function handleHashtagStatus(client, event, rawText) {
     name => name !== '初稿' && name !== '納品' && !/^修正\d+$/.test(name)
   );
 
-  if (projectNames.length === 0) return null;
-
-  // 各候補で案件を検索
   let project = null;
-  for (const name of projectNames) {
-    project = queries.getProjectByTitle(name);
-    if (project) break;
-    project = queries.getProjectByTitlePartialAny(name);
-    if (project) break;
+
+  if (projectNames.length > 0) {
+    // 案件名ハッシュタグがある場合: 完全一致 → 部分一致 → ファジーマッチ の順に検索
+    for (const name of projectNames) {
+      project = queries.getProjectByTitle(name);
+      if (project) break;
+      project = queries.getProjectByTitlePartialAny(name);
+      if (project) break;
+      // 表記ゆれ対応のファジー検索（vs⇔対、全角⇔半角 等）
+      project = queries.getProjectByTitleFuzzy(name);
+      if (project) break;
+    }
+  } else {
+    // 案件名ハッシュタグがない場合（#初稿 や #納品 だけ）:
+    // 送信者の担当する進行中案件から自動特定を試みる
+    const activeProjects = queries.getActiveProjectsByEditorLineId(userId);
+    if (activeProjects.length === 1) {
+      // 担当案件が1件のみなら自動特定
+      project = activeProjects[0];
+      console.log(`[HASHTAG] Auto-detected project: "${project.title}" (only active project for editor)`);
+    } else if (activeProjects.length > 1) {
+      // 複数案件担当中 → 案件名を指定するようメッセージ
+      const projectList = activeProjects.map(p => `・${p.title}`).join('\n');
+      return client.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: `⚠️ 担当案件が複数あるため、案件名のハッシュタグも付けてください。\n\n例: #${tagNames[0]} #案件名\n\n📋 あなたの担当案件:\n${projectList}`,
+        }],
+      });
+    }
   }
 
   if (!project) return null;
 
-  // ステータス更新
+  // ステータス更新 + 提出日時を記録
   queries.updateProjectStatus(project.id, newStatus);
+  queries.recordSubmissionTimestamp(project.id, newStatus);
 
-  // 発注者に通知（LINE連携済みの場合）
-  if (project.client_line_id) {
-    let notifyText;
-    if (newStatus === 'completed') {
-      notifyText = `🎉 案件「${project.title}」が納品されました。\n編集者: ${project.editor_name}\n\nお疲れ様でした！`;
-    } else if (newStatus === 'first_draft') {
-      notifyText = `📩 案件「${project.title}」の初稿が提出されました。\n編集者: ${project.editor_name}\n\n確認をお願いします。`;
-    } else {
-      notifyText = `📩 案件「${project.title}」の${statusLabel.replace('提出済', '')}が提出されました。\n編集者: ${project.editor_name}\n\n確認をお願いします。`;
-    }
-
-    try {
-      await client.pushMessage({
-        to: project.client_line_id,
-        messages: [{ type: 'text', text: notifyText }],
-      });
-    } catch (err) {
-      console.error('Failed to notify client:', err.message);
-    }
-  }
-
+  // グループ返信（DM不要、グループ内メンションで通知）
   if (newStatus === 'completed') {
     // 納品完了時はリッチなメッセージ + 発注者メンション
     let replyText = `🎉 案件「${project.title}」が納品されました。\n編集者: ${project.editor_name}\n\nお疲れ様でした！`;
     if (project.client_line_id) {
-      replyText += `\n\n📦 発注者の${project.client_name || '発注者'}さん、納品物のご確認・お受け取りをお願いいたします。`;
+      replyText += `\n\n📦 {mention}さん、納品物のご確認・お受け取りをお願いいたします。`;
+      const msg = withInlineMention(replyText, project.client_name || '発注者', project.client_line_id);
+      return client.replyMessage({
+        replyToken,
+        messages: [msg],
+      });
     }
     return client.replyMessage({
       replyToken,
-      messages: [{
-        type: 'text',
-        text: replyText,
-      }],
+      messages: [{ type: 'text', text: replyText }],
+    });
+  }
+
+  // 初稿・修正提出時 → 発注者メンション付きでグループに返信
+  if (project.client_line_id) {
+    const replyText = `✅ ${project.title} を「${statusLabel}」に更新しました。\n\n{mention}さん、確認をお願いします。`;
+    const msg = withInlineMention(replyText, project.client_name || '発注者', project.client_line_id);
+    return client.replyMessage({
+      replyToken,
+      messages: [msg],
     });
   }
 

@@ -145,7 +145,7 @@ function clientListMessage(clients) {
 }
 
 function helpMessage() {
-  return `📖 使い方ガイド\n━━━━━━━━━━━━━━━━\n\n【広告チーム向け】\n・案件登録 案件名/編集者/発注者/納期\n　例: 案件登録 CM編集/田中/山田/3-20\n・進捗 → ダッシュボード\n・案件一覧 → 全案件リスト\n・編集者一覧 / 発注者一覧\n\n【編集者向け】\n・LINE連携 名前 → LINE連携\n・マイ案件 → 自分の案件一覧\n・着手 [番号] → 作業中に変更\n・提出 [番号] → 提出済に変更\n\n【発注者向け】\n・発注者連携 名前 → LINE連携\n・案件確認 → 発注案件の進捗確認\n\n・ヘルプ → この画面を表示`;
+  return `📖 使い方ガイド\n━━━━━━━━━━━━━━━━\n\n【広告チーム向け】\n・案件登録 案件名/編集者/発注者/着手日/納期\n　例: 案件登録 CM編集/田中/山田/3-15/3-20\n・進捗 → ダッシュボード\n・案件一覧 → 全案件リスト\n・編集者一覧 / 発注者一覧\n\n【編集者向け】\n・編集者連携 名前 → LINE連携\n・マイ案件 → 自分の案件一覧\n・提出 [番号] → 提出済に変更\n・#初稿 #案件名 → 初稿提出\n・#修正1 #案件名 → 修正1提出\n・#納品 #案件名 → 納品完了\n※ 着手日になると自動で「作業中」になります\n\n【発注者向け】\n・発注者連携 名前 → LINE連携\n・案件確認 → 発注案件の進捗確認\n\n・ヘルプ → この画面を表示`;
 }
 
 function newProjectNotification(project, editorName) {
@@ -153,8 +153,80 @@ function newProjectNotification(project, editorName) {
   if (project.startDate) {
     msg += `\n着手日: ${dayjs(project.startDate).format('YYYY/MM/DD')}`;
   }
-  msg += `\n納期: ${dayjs(project.deadline).format('YYYY/MM/DD')}\n備考: ${project.note || 'なし'}\n─────────────\n着手したら「着手 ${project.title}」と送信してください。`;
+  msg += `\n納期: ${dayjs(project.deadline).format('YYYY/MM/DD')}\n備考: ${project.note || 'なし'}\n─────────────\n着手日になったら自動で「作業中」に変わります。`;
   return msg;
+}
+
+/**
+ * テキストの先頭にメンションを付けたメッセージオブジェクトを作成（textV2形式）
+ * LINE textV2 で送信するとメンション通知が相手に届く
+ * @param {string} text - メッセージ本文
+ * @param {string} name - メンション表示名（未使用、textV2ではLINE名が自動表示）
+ * @param {string|null} userId - LINE userId（nullの場合メンションなし）
+ * @returns {object} LINE message object
+ */
+function withMention(text, name, userId) {
+  if (!userId) {
+    return { type: 'text', text };
+  }
+  return {
+    type: 'textV2',
+    text: '{mention}\n' + text,
+    substitution: {
+      mention: {
+        type: 'mention',
+        mentionee: {
+          type: 'user',
+          userId,
+        },
+      },
+    },
+  };
+}
+
+/**
+ * テキスト内の{mention}プレースホルダーにメンションを埋め込む（textV2形式）
+ * @param {string} text - メッセージ本文（{mention}プレースホルダー含む）
+ * @param {string} name - フォールバック表示名（userId無い場合に使用）
+ * @param {string|null} userId - LINE userId
+ * @returns {object} LINE message object
+ */
+function withInlineMention(text, name, userId) {
+  if (!userId) {
+    const replaced = text.replace('{mention}', name);
+    return { type: 'text', text: replaced };
+  }
+  // textV2 では {mention} がそのままsubstitutionキーとして使える
+  return {
+    type: 'textV2',
+    text,
+    substitution: {
+      mention: {
+        type: 'mention',
+        mentionee: {
+          type: 'user',
+          userId,
+        },
+      },
+    },
+  };
+}
+
+/**
+ * 複数メンション付きメッセージオブジェクトを作成（textV2形式、遅延アラート用）
+ * @param {string} text - メッセージ本文（{editor0}, {editor1} 等のプレースホルダー含む）
+ * @param {object} substitution - textV2用のsubstitutionオブジェクト
+ * @returns {object} LINE message object
+ */
+function withMultipleMentions(text, substitution) {
+  if (!substitution || Object.keys(substitution).length === 0) {
+    return { type: 'text', text };
+  }
+  return {
+    type: 'textV2',
+    text,
+    substitution,
+  };
 }
 
 module.exports = {
@@ -170,4 +242,7 @@ module.exports = {
   overdueAlertMessage,
   helpMessage,
   newProjectNotification,
+  withMention,
+  withInlineMention,
+  withMultipleMentions,
 };

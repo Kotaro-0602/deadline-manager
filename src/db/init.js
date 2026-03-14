@@ -77,6 +77,23 @@ function initTables() {
     db.exec("ALTER TABLE projects ADD COLUMN start_date DATE");
     console.log('[DB] Added start_date column to projects table.');
   }
+
+  // 既存DBへのマイグレーション（提出日時カラムの追加）
+  const submissionColumns = [
+    'first_draft_at',   // 初稿提出日時
+    'revision_1_at',    // 修正1提出日時
+    'revision_2_at',    // 修正2提出日時
+    'revision_3_at',    // 修正3提出日時
+    'completed_at',     // 納品日時
+  ];
+  for (const col of submissionColumns) {
+    try {
+      db.prepare(`SELECT ${col} FROM projects LIMIT 1`).get();
+    } catch (e) {
+      db.exec(`ALTER TABLE projects ADD COLUMN ${col} DATETIME`);
+      console.log(`[DB] Added ${col} column to projects table.`);
+    }
+  }
 }
 
 module.exports = { getDb };
