@@ -37,6 +37,22 @@ async function handleClientCommand(client, event, command, text = '') {
       const name = match[1].trim();
       let clientRecord = queries.getClientByName(name);
 
+      // 既に同じLINEユーザーで連携済みの発注者がいるか確認
+      const existingByLine = queries.getClientByLineId(userId);
+      if (existingByLine) {
+        if (existingByLine.name === name) {
+          return client.replyMessage({
+            replyToken,
+            messages: [{
+              type: 'text',
+              text: `「${name}」は既にLINE連携済みです。\n「案件確認」で発注した案件の進捗を確認できます。`,
+            }],
+          });
+        }
+        // 別名で再連携する場合は旧連携を解除
+        queries.updateClientLineId(existingByLine.id, null);
+      }
+
       // 未登録の場合は自動登録してLINE連携
       if (!clientRecord) {
         queries.createClient(name);
