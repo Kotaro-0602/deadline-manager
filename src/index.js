@@ -144,11 +144,14 @@ async function main() {
       migrated = true;
     }
 
-    // 編集者9,10(高須賀綾)を削除
+    // 編集者9,10(高須賀綾)を削除（参照する案件のeditor_idもクリア）
     const editorIds = [9, 10];
     const existingEditors = editorIds.filter(id => db.prepare('SELECT id FROM editors WHERE id = ?').get(id));
     if (existingEditors.length > 0) {
-      existingEditors.forEach(id => db.prepare('DELETE FROM editors WHERE id = ?').run(id));
+      existingEditors.forEach(id => {
+        db.prepare('UPDATE projects SET editor_id = NULL WHERE editor_id = ?').run(id);
+        db.prepare('DELETE FROM editors WHERE id = ?').run(id);
+      });
       console.log(`[MIGRATION] Deleted editors #${existingEditors.join(', #')}.`);
       migrated = true;
     }
