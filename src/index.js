@@ -135,6 +135,15 @@ async function main() {
       migrated = true;
     }
 
+    // 編集者9,10(高須賀綾)を削除
+    const editorIds = [9, 10];
+    const existingEditors = editorIds.filter(id => db.prepare('SELECT id FROM editors WHERE id = ?').get(id));
+    if (existingEditors.length > 0) {
+      existingEditors.forEach(id => db.prepare('DELETE FROM editors WHERE id = ?').run(id));
+      console.log(`[MIGRATION] Deleted editors #${existingEditors.join(', #')}.`);
+      migrated = true;
+    }
+
     if (migrated && isSheetsEnabled()) {
       await syncAllData();
       await backupToSheets();
