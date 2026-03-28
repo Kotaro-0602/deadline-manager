@@ -167,7 +167,7 @@ async function handleHashtagStatus(client, event, rawText) {
       statusLabel = '完了';
       break;
     }
-    const revMatch = name.match(/^修正(\d+)$/);
+    const revMatch = name.match(/修正\D*(\d+)/);
     if (revMatch) {
       newStatus = `revision_${revMatch[1]}`;
       statusLabel = `修正${revMatch[1]}提出済`;
@@ -179,7 +179,7 @@ async function handleHashtagStatus(client, event, rawText) {
 
   // ステータスタグ以外を案件名候補として取得
   const projectNames = tagNames.filter(
-    name => name !== '初稿' && name !== '納品' && !/^修正\d+$/.test(name)
+    name => name !== '初稿' && name !== '納品' && !/修正\D*\d+/.test(name)
   );
 
   let project = null;
@@ -238,14 +238,12 @@ async function handleHashtagStatus(client, event, rawText) {
       errorText += '例: #納品 #2022vs2026\n\n';
       errorText += 'ハッシュタグ案件名も追加で記載して再提出をお願いします。';
     } else {
-      errorText += `【原因】案件「${projectNames.join('、')}」が見つかりませんでした。\n\n`;
-      errorText += '【考えられる原因】\n';
-      errorText += '・案件名が正しくない（登録名と一致していない）\n';
-      errorText += '・ハッシュタグの書き方が違う（#修正1回目 → #修正1）\n\n';
+      errorText += `【原因】案件名が正しくない、もしくは案件名が記載されていません。\n\n`;
       errorText += '【正しい形式】\n';
-      errorText += '#ステータス #案件名\n';
+      errorText += '#ステータス #案件名\n\n';
       errorText += '例: #初稿 #Tier表\n';
-      errorText += '例: #修正1 #Claude Code解説';
+      errorText += '例: #修正1 #Claude Code解説\n\n';
+      errorText += '案件名のハッシュタグを追加して再提出をお願いします。';
     }
     return client.replyMessage({
       replyToken,
