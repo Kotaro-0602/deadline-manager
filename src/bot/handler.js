@@ -115,12 +115,23 @@ async function handleMessage(client, event) {
   }
 
   // #初稿 / #修正N 検出 → 自動ステータス更新
-  if (/[#＃](初稿|修正\d+|納品)/.test(rawText)) {
+  if (/[#＃](初稿|修正|納品)/.test(rawText)) {
     const result = await handleHashtagStatus(client, event, rawText);
     if (result) {
       triggerSync();
       return result;
     }
+  }
+
+  // ハッシュタグはあるがステータスタグがない場合（#案件名 だけ）
+  if (/[#＃]/.test(rawText) && !/[#＃](初稿|修正|納品)/.test(rawText)) {
+    return client.replyMessage({
+      replyToken,
+      messages: [{
+        type: 'text',
+        text: '⚠️ 提出方法に誤りがあります。\n━━━━━━━━━━━━━━━━\n【原因】提出ステータスのハッシュタグがありません。\n\n以下のいずれかのステータスを追加してください:\n・#初稿\n・#修正1（修正回数に応じて数字を変更）\n・#納品\n\n【正しい形式】\n#ステータス #案件名\n\n例: #初稿 #Tier表\n例: #納品 #格付け',
+      }],
+    });
   }
 
   // 未知のコマンド
