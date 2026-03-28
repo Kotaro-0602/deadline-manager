@@ -105,6 +105,25 @@ async function main() {
     console.error('[MIGRATION] Data fix skipped or failed:', e.message);
   }
 
+  // --- 一回限り: 案件11と案件12を削除 ---
+  try {
+    const db = getDb();
+    const p11 = db.prepare('SELECT id FROM projects WHERE id = 11').get();
+    const p12 = db.prepare('SELECT id FROM projects WHERE id = 12').get();
+    if (p11 || p12) {
+      if (p11) db.prepare('DELETE FROM projects WHERE id = 11').run();
+      if (p12) db.prepare('DELETE FROM projects WHERE id = 12').run();
+      console.log('[MIGRATION] Deleted projects #11 and #12.');
+      if (isSheetsEnabled()) {
+        await syncAllData();
+        await backupToSheets();
+        console.log('[MIGRATION] Synced to Sheets and updated backup.');
+      }
+    }
+  } catch (e) {
+    console.error('[MIGRATION] Delete projects failed:', e.message);
+  }
+
   // 自動着手: 毎朝8:00（着手日になった案件を自動で「作業中」に）
   cron.schedule('0 8 * * *', () => {
     console.log('[CRON] Running auto-start check...');
