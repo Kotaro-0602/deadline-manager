@@ -226,7 +226,32 @@ async function handleHashtagStatus(client, event, rawText) {
     }
   }
 
-  if (!project) return null;
+  if (!project) {
+    // ステータスタグはあるが案件が特定できない場合、エラーメッセージを返す
+    let errorText = '⚠️ 提出方法に誤りがあります。\n━━━━━━━━━━━━━━━━\n';
+    if (projectNames.length === 0) {
+      errorText += '【原因】案件名のハッシュタグがありません。\n\n';
+      errorText += '【正しい形式】\n';
+      errorText += `#${tagNames[0]} #案件名\n\n`;
+      errorText += '例: #初稿 #Tier表\n';
+      errorText += '例: #修正1 #Claude Code解説\n';
+      errorText += '例: #納品 #2022vs2026\n\n';
+      errorText += 'ハッシュタグ案件名も追加で記載して再提出をお願いします。';
+    } else {
+      errorText += `【原因】案件「${projectNames.join('、')}」が見つかりませんでした。\n\n`;
+      errorText += '【考えられる原因】\n';
+      errorText += '・案件名が正しくない（登録名と一致していない）\n';
+      errorText += '・ハッシュタグの書き方が違う（#修正1回目 → #修正1）\n\n';
+      errorText += '【正しい形式】\n';
+      errorText += '#ステータス #案件名\n';
+      errorText += '例: #初稿 #Tier表\n';
+      errorText += '例: #修正1 #Claude Code解説';
+    }
+    return client.replyMessage({
+      replyToken,
+      messages: [{ type: 'text', text: errorText }],
+    });
+  }
 
   // ステータス更新 + 提出日時を記録
   queries.updateProjectStatus(project.id, newStatus);
