@@ -147,6 +147,30 @@ async function main() {
     console.error('[MIGRATION] Update project #16 failed:', e.message);
   }
 
+  // --- 一回限り: 案件14(格付け/川俣勝翼)の提出日時を更新 ---
+  try {
+    const db = getDb();
+    const p14 = db.prepare('SELECT id, status FROM projects WHERE id = 14').get();
+    if (p14 && p14.status !== 'completed') {
+      db.prepare(`
+        UPDATE projects SET
+          first_draft_at = '2026-03-16 23:05',
+          revision_1_at = '2026-03-20 13:39',
+          completed_at = '2026-03-21 21:52',
+          status = 'completed', updated_at = datetime('now', 'localtime')
+        WHERE id = 14
+      `).run();
+      console.log('[MIGRATION] Updated project #14 timestamps.');
+      if (isSheetsEnabled()) {
+        await syncAllData();
+        await backupToSheets();
+        console.log('[MIGRATION] Synced to Sheets and updated backup.');
+      }
+    }
+  } catch (e) {
+    console.error('[MIGRATION] Update project #14 failed:', e.message);
+  }
+
   // 自動着手: 毎朝8:00（着手日になった案件を自動で「作業中」に）
   cron.schedule('0 8 * * *', () => {
     console.log('[CRON] Running auto-start check...');
