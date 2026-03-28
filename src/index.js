@@ -97,6 +97,7 @@ async function main() {
           first_draft_at = '2026-03-25 14:05',
           revision_1_at = '2026-03-26 16:44',
           completed_at = '2026-03-28 11:39',
+          deadline = '2026-03-28',
           status = 'completed', updated_at = datetime('now', 'localtime')
         WHERE id = 19
       `).run();
