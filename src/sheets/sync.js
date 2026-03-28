@@ -160,7 +160,7 @@ async function syncAllData() {
 
     dashboardRows.push(['', '', '', '']);
     dashboardRows.push(['--- 進行中案件 ---', '', '', '']);
-    dashboardRows.push(['案件名', '担当', '納期', 'ステータス']);
+    dashboardRows.push(['案件名', '担当', '発注者', '納期', 'ステータス']);
 
     const allActive = [...overdue, ...upcoming];
     allActive.sort((a, b) => dayjs(a.deadline).diff(dayjs(b.deadline)));
@@ -173,6 +173,7 @@ async function syncAllData() {
       dashboardRows.push([
         p.title,
         p.editor_name || '未割当',
+        p.client_name || '',
         deadlineDay.format('YYYY/MM/DD'),
         statusLabel,
       ]);
