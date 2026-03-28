@@ -75,28 +75,26 @@ async function main() {
     await restoreFromSheets();
   }
 
-  // --- 一回限りのデータ修正: 案件11の提出ステータスを案件19に移す ---
-  // 案件11(Claude Code解説＿ねねさん/高須賀綾) の提出日時は実際には
-  // 案件19(Claude Code解説＿おびともみ) の作業分なので移し替える
+  // --- 一回限りのデータ修正: 案件19に正しい提出日時をセット、案件11をクリア ---
   try {
     const db = getDb();
-    const p11 = db.prepare('SELECT id, first_draft_at, revision_1_at, completed_at FROM projects WHERE id = 11').get();
     const p19 = db.prepare('SELECT id, first_draft_at FROM projects WHERE id = 19').get();
-    if (p11 && p19 && p11.completed_at && !p19.first_draft_at) {
+    if (p19 && p19.first_draft_at !== '2026-03-25 14:05') {
       db.prepare(`
         UPDATE projects SET
-          first_draft_at = ?, revision_1_at = ?, completed_at = ?,
+          first_draft_at = '2026-03-25 14:05',
+          revision_1_at = '2026-03-26 16:44',
+          completed_at = '2026-03-28 11:39',
           status = 'completed', updated_at = datetime('now', 'localtime')
         WHERE id = 19
-      `).run(p11.first_draft_at, p11.revision_1_at, p11.completed_at);
+      `).run();
       db.prepare(`
         UPDATE projects SET
           first_draft_at = NULL, revision_1_at = NULL, completed_at = NULL,
           status = 'unstarted', updated_at = datetime('now', 'localtime')
         WHERE id = 11
       `).run();
-      console.log('[MIGRATION] Moved submission timestamps from project #11 to #19.');
-      // 修正後すぐにスプレッドシートとバックアップに反映
+      console.log('[MIGRATION] Fixed project #19 timestamps and cleared #11.');
       if (isSheetsEnabled()) {
         await syncAllData();
         await backupToSheets();
