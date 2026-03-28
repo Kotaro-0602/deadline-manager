@@ -74,8 +74,19 @@ async function syncAllData() {
     const today = dayjs();
     for (const p of allProjects) {
       const deadline = dayjs(p.deadline);
-      const isOverdue = today.isAfter(deadline, 'day') && p.status !== 'completed' && p.status !== 'submitted';
-      const daysOverdue = isOverdue ? today.diff(deadline, 'day') : 0;
+      let daysOverdue = 0;
+      if (p.status === 'completed' && p.completed_at) {
+        // 完了済み: 納品日が納期を超えていたら遅延日数を記録
+        const completedDay = dayjs(p.completed_at);
+        if (completedDay.isAfter(deadline, 'day')) {
+          daysOverdue = completedDay.diff(deadline, 'day');
+        }
+      } else if (p.status !== 'completed' && p.status !== 'submitted') {
+        // 未完了: 今日が納期を超えていたら遅延中
+        if (today.isAfter(deadline, 'day')) {
+          daysOverdue = today.diff(deadline, 'day');
+        }
+      }
 
       const fmtTs = (val) => val ? dayjs(val).format('YYYY/MM/DD HH:mm') : '';
 
