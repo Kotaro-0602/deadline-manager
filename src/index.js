@@ -8,7 +8,7 @@ const { runAlert } = require('./cron/alert');
 const { runAutoStart } = require('./cron/auto-start');
 const { runRecruitment } = require('./cron/recruitment');
 const { initSheets, syncAllData, isEnabled: isSheetsEnabled } = require('./sheets/sync');
-const { restoreFromSheets } = require('./db/backup');
+const { restoreFromSheets, backupToSheets } = require('./db/backup');
 
 // .env読み込み（dotenvがなくても環境変数から取得可能）
 try { require('dotenv').config(); } catch (e) { /* dotenv is optional */ }
@@ -96,9 +96,11 @@ async function main() {
         WHERE id = 11
       `).run();
       console.log('[MIGRATION] Moved submission timestamps from project #11 to #19.');
-      // 修正後すぐにスプレッドシートに反映
+      // 修正後すぐにスプレッドシートとバックアップに反映
       if (isSheetsEnabled()) {
-        syncAllData();
+        await syncAllData();
+        await backupToSheets();
+        console.log('[MIGRATION] Synced to Sheets and updated backup.');
       }
     }
   } catch (e) {
