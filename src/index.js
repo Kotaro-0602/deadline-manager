@@ -6,6 +6,7 @@ const { handleMessage } = require('./bot/handler');
 const { runReminder } = require('./cron/reminder');
 const { runAlert } = require('./cron/alert');
 const { runAutoStart } = require('./cron/auto-start');
+const { runRecruitment } = require('./cron/recruitment');
 const { initSheets, syncAllData, isEnabled: isSheetsEnabled } = require('./sheets/sync');
 const { restoreFromSheets } = require('./db/backup');
 
@@ -74,6 +75,36 @@ async function main() {
     await restoreFromSheets();
   }
 
+  // --- 一回限りのデータ修正: 案件11の提出ステータスを案件19に移す ---
+  // 案件11(Claude Code解説＿ねねさん/高須賀綾) の提出日時は実際には
+  // 案件19(Claude Code解説＿おびともみ) の作業分なので移し替える
+  try {
+    const db = getDb();
+    const p11 = db.prepare('SELECT id, first_draft_at, revision_1_at, completed_at FROM projects WHERE id = 11').get();
+    const p19 = db.prepare('SELECT id, first_draft_at FROM projects WHERE id = 19').get();
+    if (p11 && p19 && p11.completed_at && !p19.first_draft_at) {
+      db.prepare(`
+        UPDATE projects SET
+          first_draft_at = ?, revision_1_at = ?, completed_at = ?,
+          status = 'completed', updated_at = datetime('now', 'localtime')
+        WHERE id = 19
+      `).run(p11.first_draft_at, p11.revision_1_at, p11.completed_at);
+      db.prepare(`
+        UPDATE projects SET
+          first_draft_at = NULL, revision_1_at = NULL, completed_at = NULL,
+          status = 'unstarted', updated_at = datetime('now', 'localtime')
+        WHERE id = 11
+      `).run();
+      console.log('[MIGRATION] Moved submission timestamps from project #11 to #19.');
+      // 修正後すぐにスプレッドシートに反映
+      if (isSheetsEnabled()) {
+        syncAllData();
+      }
+    }
+  } catch (e) {
+    console.error('[MIGRATION] Data fix skipped or failed:', e.message);
+  }
+
   // 自動着手: 毎朝8:00（着手日になった案件を自動で「作業中」に）
   cron.schedule('0 8 * * *', () => {
     console.log('[CRON] Running auto-start check...');
@@ -90,6 +121,12 @@ async function main() {
   cron.schedule('30 9 * * *', () => {
     console.log('[CRON] Running overdue alert...');
     runAlert(client);
+  }, { timezone: 'Asia/Tokyo' });
+
+  // 編集者募集通知: 毎朝10:00（未アサイン案件をグループに通知）
+  cron.schedule('0 10 * * *', () => {
+    console.log('[CRON] Running recruitment notification...');
+    runRecruitment(client);
   }, { timezone: 'Asia/Tokyo' });
 
   // Google Sheets同期: 毎時0分

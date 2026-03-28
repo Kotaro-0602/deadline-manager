@@ -379,6 +379,52 @@ function getProjectsToAutoStart() {
   `).all();
 }
 
+/**
+ * 編集者未アサイン（editor_id IS NULL）で登録から指定日数以上経過した未完了案件を取得
+ */
+function getUnassignedProjects(daysOld = 2) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT p.*, c.name as client_name, c.line_user_id as client_line_id
+    FROM projects p
+    LEFT JOIN clients c ON p.client_id = c.id
+    WHERE p.editor_id IS NULL
+    AND p.status != 'completed'
+    AND julianday('now', 'localtime') - julianday(p.created_at) >= ?
+    ORDER BY p.deadline ASC
+  `).all(daysOld);
+}
+
+/**
+ * 案件名＋編集者名で未完了案件を特定して削除
+ * @returns {object|null} 削除した案件情報、見つからなければnull
+ */
+function deleteProjectByTitleAndEditor(title, editorName) {
+  const db = getDb();
+  const project = db.prepare(`
+    SELECT p.*, e.name as editor_name, c.name as client_name
+    FROM projects p
+    LEFT JOIN editors e ON p.editor_id = e.id
+    LEFT JOIN clients c ON p.client_id = c.id
+    WHERE p.title = ? AND e.name = ? AND p.status != 'completed'
+  `).get(title, editorName);
+  if (!project) return null;
+  db.prepare('DELETE FROM projects WHERE id = ?').run(project.id);
+  return project;
+}
+
+/**
+ * 編集者を名前で削除（statusをinactiveに変更）
+ * @returns {object|null} 削除した編集者情報、見つからなければnull
+ */
+function deactivateEditorByName(name) {
+  const db = getDb();
+  const editor = db.prepare('SELECT * FROM editors WHERE name = ? AND status = ?').get(name, 'active');
+  if (!editor) return null;
+  db.prepare("UPDATE editors SET status = 'inactive', line_user_id = NULL WHERE id = ?").run(editor.id);
+  return editor;
+}
+
 function getProjectsDueSoon(daysAhead) {
   const db = getDb();
   return db.prepare(`
@@ -425,6 +471,9 @@ module.exports = {
   getOverdueProjects,
   getTodayDeadlineProjects,
   getUpcomingProjects,
+  getUnassignedProjects,
   getProjectsToAutoStart,
   getProjectsDueSoon,
+  deleteProjectByTitleAndEditor,
+  deactivateEditorByName,
 };

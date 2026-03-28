@@ -145,7 +145,7 @@ function clientListMessage(clients) {
 }
 
 function helpMessage() {
-  return `📖 使い方ガイド\n━━━━━━━━━━━━━━━━\n\n【広告チーム向け】\n・案件登録 案件名/編集者/発注者/着手日/納期\n　例: 案件登録 CM編集/田中/山田/3-15/3-20\n・進捗 → ダッシュボード\n・案件一覧 → 全案件リスト\n・編集者一覧 / 発注者一覧\n\n【編集者向け】\n・編集者連携 名前 → LINE連携\n・マイ案件 → 自分の案件一覧\n・提出 [番号] → 提出済に変更\n・#初稿 #案件名 → 初稿提出\n・#修正1 #案件名 → 修正1提出\n・#納品 #案件名 → 納品完了\n※ 着手日になると自動で「作業中」になります\n\n【発注者向け】\n・発注者連携 名前 → LINE連携\n・案件確認 → 発注案件の進捗確認\n\n・ヘルプ → この画面を表示`;
+  return `📖 使い方ガイド\n━━━━━━━━━━━━━━━━\n\n【広告チーム向け】\n・案件登録 案件名/編集者/発注者/着手日/納期\n　例: 案件登録 CM編集/田中/山田/3-15/3-20\n・案件削除 案件名/編集者名\n　例: 案件削除 CM編集/田中\n・編集者削除 名前\n　例: 編集者削除 田中\n・進捗 → ダッシュボード\n・案件一覧 → 全案件リスト\n・編集者一覧 / 発注者一覧\n\n【編集者向け】\n・編集者連携 名前 → LINE連携\n・マイ案件 → 自分の案件一覧\n・提出 [番号] → 提出済に変更\n・#初稿 #案件名 → 初稿提出\n・#修正1 #案件名 → 修正1提出\n・#納品 #案件名 → 納品完了\n※ 着手日になると自動で「作業中」になります\n\n【発注者向け】\n・発注者連携 名前 → LINE連携\n・案件確認 → 発注案件の進捗確認\n\n・ヘルプ → この画面を表示`;
 }
 
 function newProjectNotification(project, editorName) {
@@ -155,6 +155,43 @@ function newProjectNotification(project, editorName) {
   }
   msg += `\n納期: ${dayjs(project.deadline).format('YYYY/MM/DD')}\n備考: ${project.note || 'なし'}\n─────────────\n着手日になったら自動で「作業中」に変わります。`;
   return msg;
+}
+
+/**
+ * 編集者募集メッセージを生成
+ * @param {Array} projects - 未アサイン案件リスト（client_name, client_line_id 含む）
+ * @returns {object} LINE message object（発注者メンション付き textV2 or text）
+ */
+function recruitmentMessage(projects) {
+  let text = `📢 編集者募集中の案件があります！\n━━━━━━━━━━━━━━━━\n`;
+  const substitution = {};
+  let mentionIdx = 0;
+
+  for (const p of projects) {
+    text += `\n#${String(p.id).padStart(3, '0')} ${p.title}\n`;
+    if (p.client_line_id) {
+      const key = `client${mentionIdx}`;
+      text += `　発注者: {${key}} ｜ 納期: ${formatDate(p.deadline)}`;
+      substitution[key] = {
+        type: 'mention',
+        mentionee: { type: 'user', userId: p.client_line_id },
+      };
+      mentionIdx++;
+    } else {
+      text += `　発注者: ${p.client_name || '不明'} ｜ 納期: ${formatDate(p.deadline)}`;
+    }
+    if (p.note) {
+      text += `\n　備考: ${p.note}`;
+    }
+    text += '\n';
+  }
+
+  text += '\n受けたい方は発注者にメンションして応募してください！';
+
+  if (Object.keys(substitution).length > 0) {
+    return { type: 'textV2', text, substitution };
+  }
+  return { type: 'text', text };
 }
 
 /**
@@ -242,6 +279,7 @@ module.exports = {
   overdueAlertMessage,
   helpMessage,
   newProjectNotification,
+  recruitmentMessage,
   withMention,
   withInlineMention,
   withMultipleMentions,

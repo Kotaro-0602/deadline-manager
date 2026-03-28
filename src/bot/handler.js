@@ -54,6 +54,18 @@ async function handleMessage(client, event) {
     return result;
   }
 
+  if (text === '案件削除' || text.startsWith('案件削除 ') || text.startsWith('案件削除　')) {
+    const result = await handleAdminCommand(client, event, 'delete_project', text);
+    triggerSync();
+    return result;
+  }
+
+  if (text === '編集者削除' || text.startsWith('編集者削除 ') || text.startsWith('編集者削除　')) {
+    const result = await handleAdminCommand(client, event, 'delete_editor', text);
+    triggerSync();
+    return result;
+  }
+
   // 編集者LINE連携
   if (text.startsWith('LINE連携 ') || text.startsWith('LINE連携　') ||
       text.startsWith('編集者連携 ') || text.startsWith('編集者連携　')) {
@@ -123,11 +135,17 @@ async function handleHashtagStatus(client, event, rawText) {
   const replyToken = event.replyToken;
   const userId = event.source.userId;
 
-  // ハッシュタグを全て抽出（# と ＃ 両方対応、スペースなしの連結も対応）
-  const hashtags = rawText.match(/[#＃]([^\s#＃@＠]+)/g);
-  if (!hashtags || hashtags.length === 0) return null;
-
-  const tagNames = hashtags.map(tag => tag.replace(/^[#＃]/, ''));
+  // ハッシュタグを全て抽出（# と ＃ 両方対応）
+  // スペースを含む案件名に対応: #タグ1 の後、次の # または行末までをタグ値とする
+  // 例: "#納品 #Claude Code解説__ねねさん" → ['納品', 'Claude Code解説__ねねさん']
+  const tagNames = [];
+  const tagRegex = /[#＃]([^#＃@＠]+)/g;
+  let match;
+  while ((match = tagRegex.exec(rawText)) !== null) {
+    const value = match[1].trim();
+    if (value) tagNames.push(value);
+  }
+  if (tagNames.length === 0) return null;
 
   // ステータスタグを検出（#初稿 or #修正N or #納品）
   let newStatus = null;
@@ -162,15 +180,25 @@ async function handleHashtagStatus(client, event, rawText) {
   let project = null;
 
   if (projectNames.length > 0) {
-    // 案件名ハッシュタグがある場合: 完全一致 → 部分一致 → ファジーマッチ の順に検索
+    // 案件名ハッシュタグがある場合:
+    // まず送信者（編集者）の担当案件内で検索し、見つからなければ全案件から検索
     for (const name of projectNames) {
-      project = queries.getProjectByTitle(name);
+      // 1) 送信者の担当案件で完全一致 → 部分一致
+      project = queries.getProjectByTitleAndEditorLineId(name, userId);
       if (project) break;
-      project = queries.getProjectByTitlePartialAny(name);
+      project = queries.getProjectByTitlePartial(name, userId);
       if (project) break;
-      // 表記ゆれ対応のファジー検索（vs⇔対、全角⇔半角 等）
-      project = queries.getProjectByTitleFuzzy(name);
-      if (project) break;
+    }
+    if (!project) {
+      // 2) 全案件から 完全一致 → 部分一致 → ファジーマッチ
+      for (const name of projectNames) {
+        project = queries.getProjectByTitle(name);
+        if (project) break;
+        project = queries.getProjectByTitlePartialAny(name);
+        if (project) break;
+        project = queries.getProjectByTitleFuzzy(name);
+        if (project) break;
+      }
     }
   } else {
     // 案件名ハッシュタグがない場合（#初稿 や #納品 だけ）:
