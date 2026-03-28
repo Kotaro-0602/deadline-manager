@@ -485,19 +485,14 @@ module.exports = {
 
 function getEditorDeliveryStats(editorId) {
   const db = getDb();
-  const rows = db.prepare(`
-    SELECT deadline, completed_at
+  const row = db.prepare(`
+    SELECT
+      COUNT(*) as total,
+      SUM(CASE WHEN date(completed_at) <= date(deadline) THEN 1 ELSE 0 END) as on_time
     FROM projects
     WHERE editor_id = ? AND status = 'completed' AND completed_at IS NOT NULL
-  `).all(editorId);
-  let onTime = 0;
-  let late = 0;
-  for (const r of rows) {
-    if (r.completed_at <= r.deadline + ' 23:59') {
-      onTime++;
-    } else {
-      late++;
-    }
-  }
+  `).get(editorId);
+  const onTime = row.on_time || 0;
+  const late = (row.total || 0) - onTime;
   return { onTime, late };
 }

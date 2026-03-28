@@ -126,9 +126,9 @@ async function syncAllData() {
         e.name,
         e.line_user_id ? '連携済' : '未連携',
         e.status === 'active' ? '稼働中' : '非稼働',
-        editorProjects.length,
-        stats.onTime,
-        stats.late,
+        editorProjects.length + '件',
+        stats.onTime + '件',
+        stats.late + '件',
         rate,
         dayjs(e.created_at).format('YYYY/MM/DD'),
       ]);
