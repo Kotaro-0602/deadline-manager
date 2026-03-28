@@ -238,12 +238,9 @@ async function handleHashtagStatus(client, event, rawText) {
       errorText += '例: #納品 #2022vs2026\n\n';
       errorText += 'ハッシュタグ案件名も追加で記載して再提出をお願いします。';
     } else {
-      errorText += `【原因】案件名が正しくない、もしくは案件名が記載されていません。\n\n`;
-      errorText += '【正しい形式】\n';
-      errorText += '#ステータス #案件名\n\n';
-      errorText += '例: #初稿 #Tier表\n';
-      errorText += '例: #修正1 #Claude Code解説\n\n';
-      errorText += '案件名のハッシュタグを追加して再提出をお願いします。';
+      errorText += `【原因】案件「${projectNames.join('、')}」が登録されていません。\n\n`;
+      errorText += '案件登録がまだの場合は、最初に案件登録を行ってください。\n';
+      errorText += '案件名が間違っている場合は、正しい案件名で再提出をお願いします。';
     }
     return client.replyMessage({
       replyToken,
