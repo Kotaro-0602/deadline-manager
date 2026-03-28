@@ -27,7 +27,12 @@ async function handleMessage(client, event) {
   const text = stripMention(rawText);
   const userId = event.source.userId;
   const sourceType = event.source.type; // 'user' | 'group' | 'room'
+  const groupId = event.source.groupId || event.source.roomId || null;
   const replyToken = event.replyToken;
+
+  if (groupId) {
+    console.log(`[GROUP] Message from group/room: ${groupId}`);
+  }
 
   // コマンドルーティング
   if (text === '案件登録' || text.startsWith('案件登録 ') || text.startsWith('案件登録　') || text.startsWith('案件登録/')) {
