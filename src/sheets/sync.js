@@ -113,7 +113,7 @@ async function syncAllData() {
     // === 編集者一覧シート ===
     const allEditors = queries.getAllEditors();
     const editorRows = [
-      ['編集者ID', '名前', 'LINE連携', 'ステータス', '担当案件数', '納期内納品', '期日超過', '納期内率', '登録日'],
+      ['編集者ID', '名前', 'LINE連携', 'ステータス', '担当案件数', '納期内納品', '期日超過', '納期内率', '平均納品日数', '登録日'],
     ];
 
     for (const e of allEditors) {
@@ -130,6 +130,7 @@ async function syncAllData() {
         stats.onTime + '件',
         stats.late + '件',
         rate,
+        stats.avgDays != null ? stats.avgDays + '日' : '-',
         dayjs(e.created_at).format('YYYY/MM/DD'),
       ]);
     }

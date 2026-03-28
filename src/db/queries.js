@@ -488,11 +488,13 @@ function getEditorDeliveryStats(editorId) {
   const row = db.prepare(`
     SELECT
       COUNT(*) as total,
-      SUM(CASE WHEN date(completed_at) <= date(deadline) THEN 1 ELSE 0 END) as on_time
+      SUM(CASE WHEN date(completed_at) <= date(deadline) THEN 1 ELSE 0 END) as on_time,
+      AVG(julianday(completed_at) - julianday(start_date)) as avg_days
     FROM projects
     WHERE editor_id = ? AND status = 'completed' AND completed_at IS NOT NULL
   `).get(editorId);
   const onTime = row.on_time || 0;
   const late = (row.total || 0) - onTime;
-  return { onTime, late };
+  const avgDays = row.avg_days != null ? Math.round(row.avg_days * 10) / 10 : null;
+  return { onTime, late, avgDays };
 }
