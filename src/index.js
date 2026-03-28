@@ -135,6 +135,15 @@ async function main() {
       migrated = true;
     }
 
+    // 編集者14(白山 友康/未連携)の案件を編集者13(白山友康/連携済)に移行して削除
+    const e14 = db.prepare('SELECT id FROM editors WHERE id = 14').get();
+    if (e14) {
+      db.prepare('UPDATE projects SET editor_id = 13 WHERE editor_id = 14').run();
+      db.prepare('DELETE FROM editors WHERE id = 14').run();
+      console.log('[MIGRATION] Moved projects from editor #14 to #13, deleted editor #14.');
+      migrated = true;
+    }
+
     // 編集者9,10(高須賀綾)を削除
     const editorIds = [9, 10];
     const existingEditors = editorIds.filter(id => db.prepare('SELECT id FROM editors WHERE id = ?').get(id));
