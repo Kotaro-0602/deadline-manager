@@ -108,12 +108,11 @@ async function main() {
   // --- 一回限り: 案件11と案件12を削除 ---
   try {
     const db = getDb();
-    const p11 = db.prepare('SELECT id FROM projects WHERE id = 11').get();
-    const p12 = db.prepare('SELECT id FROM projects WHERE id = 12').get();
-    if (p11 || p12) {
-      if (p11) db.prepare('DELETE FROM projects WHERE id = 11').run();
-      if (p12) db.prepare('DELETE FROM projects WHERE id = 12').run();
-      console.log('[MIGRATION] Deleted projects #11 and #12.');
+    const ids = [10, 11, 12];
+    const existing = ids.filter(id => db.prepare('SELECT id FROM projects WHERE id = ?').get(id));
+    if (existing.length > 0) {
+      existing.forEach(id => db.prepare('DELETE FROM projects WHERE id = ?').run(id));
+      console.log(`[MIGRATION] Deleted projects #${existing.join(', #')}.`);
       if (isSheetsEnabled()) {
         await syncAllData();
         await backupToSheets();
