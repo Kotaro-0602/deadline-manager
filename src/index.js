@@ -123,6 +123,30 @@ async function main() {
     console.error('[MIGRATION] Delete projects failed:', e.message);
   }
 
+  // --- 一回限り: 案件16(未来人AI＆セミナーver/小山寛治)の提出日時を更新 ---
+  try {
+    const db = getDb();
+    const p16 = db.prepare('SELECT id, status FROM projects WHERE id = 16').get();
+    if (p16 && p16.status !== 'completed') {
+      db.prepare(`
+        UPDATE projects SET
+          first_draft_at = '2026-03-22 22:19',
+          revision_1_at = '2026-03-23 19:47',
+          completed_at = '2026-03-24 16:27',
+          status = 'completed', updated_at = datetime('now', 'localtime')
+        WHERE id = 16
+      `).run();
+      console.log('[MIGRATION] Updated project #16 timestamps.');
+      if (isSheetsEnabled()) {
+        await syncAllData();
+        await backupToSheets();
+        console.log('[MIGRATION] Synced to Sheets and updated backup.');
+      }
+    }
+  } catch (e) {
+    console.error('[MIGRATION] Update project #16 failed:', e.message);
+  }
+
   // 自動着手: 毎朝8:00（着手日になった案件を自動で「作業中」に）
   cron.schedule('0 8 * * *', () => {
     console.log('[CRON] Running auto-start check...');
