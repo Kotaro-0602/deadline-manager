@@ -108,7 +108,7 @@ async function main() {
   // --- 一回限り: 案件11と案件12を削除 ---
   try {
     const db = getDb();
-    const ids = [10, 11, 12];
+    const ids = [9, 10, 11, 12];
     const existing = ids.filter(id => db.prepare('SELECT id FROM projects WHERE id = ?').get(id));
     if (existing.length > 0) {
       existing.forEach(id => db.prepare('DELETE FROM projects WHERE id = ?').run(id));
