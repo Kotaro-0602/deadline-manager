@@ -480,4 +480,24 @@ module.exports = {
   getProjectsDueSoon,
   deleteProjectByTitleAndEditor,
   deactivateEditorByName,
+  getEditorDeliveryStats,
 };
+
+function getEditorDeliveryStats(editorId) {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT deadline, completed_at
+    FROM projects
+    WHERE editor_id = ? AND status = 'completed' AND completed_at IS NOT NULL
+  `).all(editorId);
+  let onTime = 0;
+  let late = 0;
+  for (const r of rows) {
+    if (r.completed_at <= r.deadline + ' 23:59') {
+      onTime++;
+    } else {
+      late++;
+    }
+  }
+  return { onTime, late };
+}
