@@ -73,8 +73,13 @@ async function handleRegisterProject(client, event, text) {
   if (!isEditorUnassigned) {
     editor = queries.getEditorByName(editorName);
     if (!editor) {
-      queries.createEditor(editorName);
-      editor = queries.getEditorByName(editorName);
+      return client.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: `⚠️ 編集者「${editorName}」の編集者連携が行われていません。\n\n編集者連携が行われていない状態では案件登録ができません。\n最初に編集者連携を行ってください。\n\n【編集者連携方法】\n編集者連携 ${editorName}`,
+        }],
+      });
     }
   }
 
