@@ -331,9 +331,11 @@ function getOverdueProjects() {
   const db = getDb();
   return db.prepare(`
     SELECT p.*, e.name as editor_name, e.line_user_id as editor_line_id,
+           c.name as client_name,
            julianday('now', 'localtime') - julianday(p.deadline) as days_overdue
     FROM projects p
     LEFT JOIN editors e ON p.editor_id = e.id
+    LEFT JOIN clients c ON p.client_id = c.id
     WHERE p.deadline < date('now', 'localtime')
     AND p.status NOT IN ('completed', 'submitted')
     ORDER BY p.deadline ASC
@@ -355,9 +357,11 @@ function getTodayDeadlineProjects() {
 function getUpcomingProjects() {
   const db = getDb();
   return db.prepare(`
-    SELECT p.*, e.name as editor_name, e.line_user_id as editor_line_id
+    SELECT p.*, e.name as editor_name, e.line_user_id as editor_line_id,
+           c.name as client_name
     FROM projects p
     LEFT JOIN editors e ON p.editor_id = e.id
+    LEFT JOIN clients c ON p.client_id = c.id
     WHERE p.deadline > date('now', 'localtime')
     AND p.status NOT IN ('completed')
     ORDER BY p.deadline ASC
