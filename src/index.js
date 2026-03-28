@@ -171,6 +171,16 @@ async function main() {
     console.error('[MIGRATION] Update project #14 failed:', e.message);
   }
 
+  // 起動時に必ずSheetsを最新コードで同期
+  if (isSheetsEnabled()) {
+    try {
+      await syncAllData();
+      console.log('[STARTUP] Synced all data to Sheets.');
+    } catch (e) {
+      console.error('[STARTUP] Sheets sync failed:', e.message);
+    }
+  }
+
   // 自動着手: 毎朝8:00（着手日になった案件を自動で「作業中」に）
   cron.schedule('0 8 * * *', () => {
     console.log('[CRON] Running auto-start check...');
