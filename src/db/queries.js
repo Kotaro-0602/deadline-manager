@@ -119,7 +119,7 @@ function getProjectsByEditorId(editorId) {
     SELECT p.*, e.name as editor_name
     FROM projects p
     LEFT JOIN editors e ON p.editor_id = e.id
-    WHERE p.editor_id = ?
+    WHERE p.editor_id = ? AND p.status = 'completed'
     ORDER BY p.deadline ASC
   `).all(editorId);
 }
