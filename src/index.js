@@ -75,11 +75,23 @@ async function main() {
     await restoreFromSheets();
   }
 
-  // --- 一回限りのデータ修正: 案件19に正しい提出日時をセット、案件11をクリア ---
+  // --- データ修正: 毎回確実に適用 ---
   try {
     const db = getDb();
-    const p19 = db.prepare('SELECT id, first_draft_at FROM projects WHERE id = 19').get();
-    if (p19 && p19.first_draft_at !== '2026-03-25 14:05') {
+    let migrated = false;
+
+    // 案件9,10,11,12を削除
+    const idsToDelete = [9, 10, 11, 12];
+    const existing = idsToDelete.filter(id => db.prepare('SELECT id FROM projects WHERE id = ?').get(id));
+    if (existing.length > 0) {
+      existing.forEach(id => db.prepare('DELETE FROM projects WHERE id = ?').run(id));
+      console.log(`[MIGRATION] Deleted projects #${existing.join(', #')}.`);
+      migrated = true;
+    }
+
+    // 案件19: おびともみの提出日時
+    const p19 = db.prepare('SELECT id FROM projects WHERE id = 19').get();
+    if (p19) {
       db.prepare(`
         UPDATE projects SET
           first_draft_at = '2026-03-25 14:05',
@@ -88,46 +100,13 @@ async function main() {
           status = 'completed', updated_at = datetime('now', 'localtime')
         WHERE id = 19
       `).run();
-      db.prepare(`
-        UPDATE projects SET
-          first_draft_at = NULL, revision_1_at = NULL, completed_at = NULL,
-          status = 'unstarted', updated_at = datetime('now', 'localtime')
-        WHERE id = 11
-      `).run();
-      console.log('[MIGRATION] Fixed project #19 timestamps and cleared #11.');
-      if (isSheetsEnabled()) {
-        await syncAllData();
-        await backupToSheets();
-        console.log('[MIGRATION] Synced to Sheets and updated backup.');
-      }
+      console.log('[MIGRATION] Updated project #19 timestamps.');
+      migrated = true;
     }
-  } catch (e) {
-    console.error('[MIGRATION] Data fix skipped or failed:', e.message);
-  }
 
-  // --- 一回限り: 案件11と案件12を削除 ---
-  try {
-    const db = getDb();
-    const ids = [9, 10, 11, 12];
-    const existing = ids.filter(id => db.prepare('SELECT id FROM projects WHERE id = ?').get(id));
-    if (existing.length > 0) {
-      existing.forEach(id => db.prepare('DELETE FROM projects WHERE id = ?').run(id));
-      console.log(`[MIGRATION] Deleted projects #${existing.join(', #')}.`);
-      if (isSheetsEnabled()) {
-        await syncAllData();
-        await backupToSheets();
-        console.log('[MIGRATION] Synced to Sheets and updated backup.');
-      }
-    }
-  } catch (e) {
-    console.error('[MIGRATION] Delete projects failed:', e.message);
-  }
-
-  // --- 一回限り: 案件16(未来人AI＆セミナーver/小山寛治)の提出日時を更新 ---
-  try {
-    const db = getDb();
-    const p16 = db.prepare('SELECT id, status FROM projects WHERE id = 16').get();
-    if (p16 && p16.status !== 'completed') {
+    // 案件16: 未来人AI＆セミナーver/小山寛治
+    const p16 = db.prepare('SELECT id FROM projects WHERE id = 16').get();
+    if (p16) {
       db.prepare(`
         UPDATE projects SET
           first_draft_at = '2026-03-22 22:19',
@@ -137,21 +116,12 @@ async function main() {
         WHERE id = 16
       `).run();
       console.log('[MIGRATION] Updated project #16 timestamps.');
-      if (isSheetsEnabled()) {
-        await syncAllData();
-        await backupToSheets();
-        console.log('[MIGRATION] Synced to Sheets and updated backup.');
-      }
+      migrated = true;
     }
-  } catch (e) {
-    console.error('[MIGRATION] Update project #16 failed:', e.message);
-  }
 
-  // --- 一回限り: 案件14(格付け/川俣勝翼)の提出日時を更新 ---
-  try {
-    const db = getDb();
-    const p14 = db.prepare('SELECT id, status FROM projects WHERE id = 14').get();
-    if (p14 && p14.status !== 'completed') {
+    // 案件14: 格付け/川俣勝翼
+    const p14 = db.prepare('SELECT id FROM projects WHERE id = 14').get();
+    if (p14) {
       db.prepare(`
         UPDATE projects SET
           first_draft_at = '2026-03-16 23:05',
@@ -161,14 +131,16 @@ async function main() {
         WHERE id = 14
       `).run();
       console.log('[MIGRATION] Updated project #14 timestamps.');
-      if (isSheetsEnabled()) {
-        await syncAllData();
-        await backupToSheets();
-        console.log('[MIGRATION] Synced to Sheets and updated backup.');
-      }
+      migrated = true;
+    }
+
+    if (migrated && isSheetsEnabled()) {
+      await syncAllData();
+      await backupToSheets();
+      console.log('[MIGRATION] Synced to Sheets and updated backup.');
     }
   } catch (e) {
-    console.error('[MIGRATION] Update project #14 failed:', e.message);
+    console.error('[MIGRATION] Data fix failed:', e.message);
   }
 
   // 起動時に必ずSheetsを最新コードで同期
@@ -191,12 +163,6 @@ async function main() {
   cron.schedule('0 9 * * *', () => {
     console.log('[CRON] Running daily reminder...');
     runReminder(client);
-  }, { timezone: 'Asia/Tokyo' });
-
-  // 遅延アラート: 毎朝9:30
-  cron.schedule('30 9 * * *', () => {
-    console.log('[CRON] Running overdue alert...');
-    runAlert(client);
   }, { timezone: 'Asia/Tokyo' });
 
   // 編集者募集通知: 毎朝10:00（未アサイン案件をグループに通知）

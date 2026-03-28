@@ -20,7 +20,7 @@ async function handleRegisterProject(client, event, text) {
       replyToken,
       messages: [{
         type: 'text',
-        text: '📝 案件登録フォーマット\n━━━━━━━━━━━━━━━━\n\n案件登録 案件名/編集者/発注者/着手日/納期\n\n例:\n案件登録 AI産業革命/安藤弘隆/山田太郎/2026-03-10/2026-03-20\n案件登録 CM動画編集/田中/鈴木/3-10/3-20\n\n※備考を追加する場合:\n案件登録 案件名/編集者/発注者/着手日/納期/備考\n\n※日付は 2026-03-13 や 3-20 形式で入力',
+        text: '📝 案件登録フォーマット\n━━━━━━━━━━━━━━━━\n\n案件登録 案件名/編集者/発注者/着手日/納期\n\n例:\n案件登録 AI産業革命/安藤弘隆/山田太郎/2026-03-10/2026-03-20\n案件登録 CM動画編集/田中/鈴木/3-10/3-20\n\n※編集者が未定の場合:\n案件登録 案件名/未定/発注者/着手日/納期\n（「未定」「-」「なし」または空欄で登録可）\n\n※備考を追加する場合:\n案件登録 案件名/編集者/発注者/着手日/納期/備考\n\n※日付は 2026-03-13 や 3-20 形式で入力',
       }],
     });
   }
@@ -40,6 +40,9 @@ async function handleRegisterProject(client, event, text) {
   }
 
   const { title, editorName, clientName, startDate, deadline, note } = parsed;
+
+  // --- 編集者が「未定」かどうか判定 ---
+  const isEditorUnassigned = !editorName || ['未定', '-', 'なし', ''].includes(editorName.trim());
 
   // --- 着手日バリデーション ---
   const parsedStartDate = parseDeadline(startDate);
@@ -65,11 +68,14 @@ async function handleRegisterProject(client, event, text) {
     });
   }
 
-  // --- 編集者の取得 or 自動登録 ---
-  let editor = queries.getEditorByName(editorName);
-  if (!editor) {
-    queries.createEditor(editorName);
+  // --- 編集者の取得 or 自動登録（未定の場合はスキップ） ---
+  let editor = null;
+  if (!isEditorUnassigned) {
     editor = queries.getEditorByName(editorName);
+    if (!editor) {
+      queries.createEditor(editorName);
+      editor = queries.getEditorByName(editorName);
+    }
   }
 
   // --- 発注者の取得 or 自動登録 ---
@@ -82,7 +88,7 @@ async function handleRegisterProject(client, event, text) {
   // --- DB登録 ---
   const result = queries.createProject(
     title,
-    editor.id,
+    editor ? editor.id : null,
     userId,
     parsedDeadline,
     note || null,
@@ -98,11 +104,13 @@ async function handleRegisterProject(client, event, text) {
     note: note || null,
   };
 
+  const displayEditorName = isEditorUnassigned ? '未定（募集中）' : editorName;
+
   // 登録者への返信
   await client.replyMessage({
     replyToken,
     messages: [
-      { type: 'text', text: templates.projectRegisteredMessage(project, editorName, clientName) },
+      { type: 'text', text: templates.projectRegisteredMessage(project, displayEditorName, clientName) },
     ],
   });
 
@@ -132,16 +140,16 @@ function parseRegistration(body) {
   const dHD   = '\\d{1,2}-\\d{1,2}';            // M-D
   const datePattern = `(?:${dYMD}|${dYSD}|${dSD}|${dHD})`;
 
-  // 案件名/編集者/発注者/着手日/納期(/備考)
+  // 案件名/編集者/発注者/着手日/納期(/備考)  ※編集者は空欄・未定・-・なし も許容
   const regex = new RegExp(
-    `^(.+?)\\/(.+?)\\/(.+?)\\/(${datePattern})\\/(${datePattern})(?:\\/(.+))?$`
+    `^(.+?)\\/(.*?)\\/(.+?)\\/(${datePattern})\\/(${datePattern})(?:\\/(.+))?$`
   );
 
   const m = normalized.match(regex);
   if (m) {
     return {
       title: m[1].trim(),
-      editorName: m[2].trim(),
+      editorName: m[2].trim(),  // 空文字の場合もある
       clientName: m[3].trim(),
       startDate: m[4].trim(),
       deadline: m[5].trim(),
