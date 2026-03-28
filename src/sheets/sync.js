@@ -158,6 +158,19 @@ async function syncAllData() {
       ]);
     }
 
+    dashboardRows.push(['', '', '', '']);
+    dashboardRows.push(['--- 進行中案件 ---', '', '', '']);
+    dashboardRows.push(['案件名', '担当', '納期', 'ステータス']);
+
+    for (const p of upcoming) {
+      dashboardRows.push([
+        p.title,
+        p.editor_name || '未割当',
+        dayjs(p.deadline).format('YYYY/MM/DD'),
+        STATUS_LABELS[p.status] || p.status,
+      ]);
+    }
+
     // シートをクリアして書き込み
     await clearAndWrite(spreadsheetId, '案件一覧', projectRows);
     await clearAndWrite(spreadsheetId, '編集者一覧', editorRows);
