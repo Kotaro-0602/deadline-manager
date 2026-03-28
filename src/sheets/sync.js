@@ -162,12 +162,19 @@ async function syncAllData() {
     dashboardRows.push(['--- 進行中案件 ---', '', '', '']);
     dashboardRows.push(['案件名', '担当', '納期', 'ステータス']);
 
-    for (const p of upcoming) {
+    const allActive = [...overdue, ...upcoming];
+    allActive.sort((a, b) => dayjs(a.deadline).diff(dayjs(b.deadline)));
+    for (const p of allActive) {
+      const deadlineDay = dayjs(p.deadline);
+      const isLate = dayjs().isAfter(deadlineDay, 'day') && p.status !== 'completed';
+      const statusLabel = isLate
+        ? `⚠️遅延 ${dayjs().diff(deadlineDay, 'day')}日超過`
+        : (STATUS_LABELS[p.status] || p.status);
       dashboardRows.push([
         p.title,
         p.editor_name || '未割当',
-        dayjs(p.deadline).format('YYYY/MM/DD'),
-        STATUS_LABELS[p.status] || p.status,
+        deadlineDay.format('YYYY/MM/DD'),
+        statusLabel,
       ]);
     }
 
