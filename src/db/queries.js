@@ -429,6 +429,23 @@ function deactivateEditorByName(name) {
   return editor;
 }
 
+/**
+ * 初稿提出リマインド対象の案件を取得
+ * 条件: 初稿未提出、着手日の翌日（start_date + 1日 = 今日）
+ */
+function getFirstDraftReminderProjects() {
+  const db = getDb();
+  return db.prepare(`
+    SELECT p.*, e.name as editor_name, e.line_user_id as editor_line_id
+    FROM projects p
+    LEFT JOIN editors e ON p.editor_id = e.id
+    WHERE p.status NOT IN ('completed', 'submitted')
+    AND p.first_draft_at IS NULL
+    AND p.start_date IS NOT NULL
+    AND date(p.start_date, '+1 day') = date('now', 'localtime')
+  `).all();
+}
+
 function getProjectsDueSoon(daysAhead) {
   const db = getDb();
   return db.prepare(`
@@ -478,6 +495,7 @@ module.exports = {
   getUnassignedProjects,
   getProjectsToAutoStart,
   getProjectsDueSoon,
+  getFirstDraftReminderProjects,
   deleteProjectByTitleAndEditor,
   deactivateEditorByName,
   getEditorDeliveryStats,
