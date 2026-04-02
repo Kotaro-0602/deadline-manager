@@ -431,7 +431,7 @@ function deactivateEditorByName(name) {
 
 /**
  * 初稿提出リマインド対象の案件を取得
- * 条件: 初稿未提出、着手日の翌日（start_date + 1日 = 今日）
+ * 条件: 初稿未提出、着手日の翌日（start_date + 1日 = 今日 = 2日目）
  */
 function getFirstDraftReminderProjects() {
   const db = getDb();
@@ -443,6 +443,38 @@ function getFirstDraftReminderProjects() {
     AND p.first_draft_at IS NULL
     AND p.start_date IS NOT NULL
     AND date(p.start_date, '+1 day') = date('now', 'localtime')
+  `).all();
+}
+
+/**
+ * 納期前日リマインド対象の案件を取得
+ * 条件: 未完了、着手から3日目（start_date + 2日 = 今日）
+ */
+function getDeadlineEveReminderProjects() {
+  const db = getDb();
+  return db.prepare(`
+    SELECT p.*, e.name as editor_name, e.line_user_id as editor_line_id
+    FROM projects p
+    LEFT JOIN editors e ON p.editor_id = e.id
+    WHERE p.status NOT IN ('completed', 'submitted')
+    AND p.start_date IS NOT NULL
+    AND date(p.start_date, '+2 days') = date('now', 'localtime')
+  `).all();
+}
+
+/**
+ * 納期当日リマインド対象の案件を取得
+ * 条件: 未完了、着手から4日目（start_date + 3日 = 今日）
+ */
+function getDeadlineDayReminderProjects() {
+  const db = getDb();
+  return db.prepare(`
+    SELECT p.*, e.name as editor_name, e.line_user_id as editor_line_id
+    FROM projects p
+    LEFT JOIN editors e ON p.editor_id = e.id
+    WHERE p.status NOT IN ('completed', 'submitted')
+    AND p.start_date IS NOT NULL
+    AND date(p.start_date, '+3 days') = date('now', 'localtime')
   `).all();
 }
 
@@ -496,6 +528,8 @@ module.exports = {
   getProjectsToAutoStart,
   getProjectsDueSoon,
   getFirstDraftReminderProjects,
+  getDeadlineEveReminderProjects,
+  getDeadlineDayReminderProjects,
   deleteProjectByTitleAndEditor,
   deactivateEditorByName,
   getEditorDeliveryStats,

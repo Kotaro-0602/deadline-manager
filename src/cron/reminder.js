@@ -92,6 +92,56 @@ async function runReminder(client) {
     }
   }
 
+  // 納期前日リマインド（着手から3日目の朝）
+  const deadlineEveProjects = queries.getDeadlineEveReminderProjects();
+  for (const project of deadlineEveProjects) {
+    const alreadySent = queries.getTodayReminderLog(project.id, 'deadline_eve_reminder');
+    if (alreadySent) continue;
+
+    try {
+      let text = `⏰ 納期リマインド\n━━━━━━━━━━━━━━━━\n`;
+      text += `案件: ${project.title}\n`;
+      text += `明日が納期になります。よろしくお願いいたします。`;
+
+      if (project.editor_line_id) {
+        const msg = withMention(text, project.editor_name, project.editor_line_id);
+        await client.pushMessage({ to: groupId, messages: [msg] });
+      } else {
+        text += `\n担当: ${project.editor_name || '未定'}`;
+        await client.pushMessage({ to: groupId, messages: [{ type: 'text', text }] });
+      }
+      queries.createReminderLog(project.id, 'deadline_eve_reminder');
+      console.log(`[REMINDER] Deadline eve reminder sent for project #${project.id}`);
+    } catch (err) {
+      console.error(`[REMINDER] Failed to send deadline eve reminder for project #${project.id}:`, err.message);
+    }
+  }
+
+  // 納期当日リマインド（着手から4日目の朝）
+  const deadlineDayProjects = queries.getDeadlineDayReminderProjects();
+  for (const project of deadlineDayProjects) {
+    const alreadySent = queries.getTodayReminderLog(project.id, 'deadline_day_reminder');
+    if (alreadySent) continue;
+
+    try {
+      let text = `🔥 本日納期\n━━━━━━━━━━━━━━━━\n`;
+      text += `案件: ${project.title}\n`;
+      text += `本日が納期になります。よろしくお願いいたします。`;
+
+      if (project.editor_line_id) {
+        const msg = withMention(text, project.editor_name, project.editor_line_id);
+        await client.pushMessage({ to: groupId, messages: [msg] });
+      } else {
+        text += `\n担当: ${project.editor_name || '未定'}`;
+        await client.pushMessage({ to: groupId, messages: [{ type: 'text', text }] });
+      }
+      queries.createReminderLog(project.id, 'deadline_day_reminder');
+      console.log(`[REMINDER] Deadline day reminder sent for project #${project.id}`);
+    } catch (err) {
+      console.error(`[REMINDER] Failed to send deadline day reminder for project #${project.id}:`, err.message);
+    }
+  }
+
   // 超過リマインド
   const overdueProjects = queries.getOverdueProjects();
   for (const project of overdueProjects) {
