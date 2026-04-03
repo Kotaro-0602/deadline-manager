@@ -164,10 +164,8 @@ async function main() {
       migrated = true;
     }
 
-    if (migrated && isSheetsEnabled()) {
-      await syncAllData();
-      await backupToSheets();
-      console.log('[MIGRATION] Synced to Sheets and updated backup.');
+    if (migrated) {
+      console.log('[MIGRATION] Data fixes applied. Will sync after reverse-sync.');
     }
   } catch (e) {
     console.error('[MIGRATION] Data fix failed:', e.message);
