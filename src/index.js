@@ -176,6 +176,7 @@ async function main() {
     try {
       await reverseSyncFromSheets();
       await syncAllData();
+      await backupToSheets();
       console.log('[STARTUP] Synced all data to Sheets.');
     } catch (e) {
       console.error('[STARTUP] Sheets sync failed:', e.message);
