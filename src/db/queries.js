@@ -277,6 +277,16 @@ function updateProjectStatus(projectId, status) {
 }
 
 /**
+ * completed_atを任意の日時で更新する（スプシ逆同期用）
+ */
+function updateProjectCompletedAt(projectId, completedAt) {
+  const db = getDb();
+  return db.prepare(
+    "UPDATE projects SET completed_at = ?, updated_at = datetime('now', 'localtime') WHERE id = ?"
+  ).run(completedAt, projectId);
+}
+
+/**
  * 提出日時を記録する
  * @param {number} projectId
  * @param {string} status - first_draft, revision_1, revision_2, revision_3, completed
@@ -487,6 +497,7 @@ module.exports = {
   getProjectByTitleAndEditorLineId,
   getProjectByTitlePartial,
   updateProjectStatus,
+  updateProjectCompletedAt,
   recordSubmissionTimestamp,
   getCompletedProjectsThisWeek,
   createReminderLog,

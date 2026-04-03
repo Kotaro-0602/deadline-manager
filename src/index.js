@@ -8,6 +8,7 @@ const { runAlert } = require('./cron/alert');
 const { runAutoStart } = require('./cron/auto-start');
 const { runRecruitment } = require('./cron/recruitment');
 const { initSheets, syncAllData, isEnabled: isSheetsEnabled } = require('./sheets/sync');
+const { reverseSyncFromSheets } = require('./sheets/reverse-sync');
 const { restoreFromSheets, backupToSheets } = require('./db/backup');
 
 // .env読み込み（dotenvがなくても環境変数から取得可能）
@@ -57,7 +58,14 @@ async function handleEvent(event) {
     return result;
   } catch (err) {
     console.error(`[WEBHOOK] Handler error:`, err);
-    throw err;
+    try {
+      await client.replyMessage({
+        replyToken: event.replyToken,
+        messages: [{ type: 'text', text: `⚠️ エラーが発生しました。\n${err.message}` }],
+      });
+    } catch (replyErr) {
+      console.error(`[WEBHOOK] Failed to send error reply:`, replyErr.message);
+    }
   }
 }
 
@@ -165,9 +173,10 @@ async function main() {
     console.error('[MIGRATION] Data fix failed:', e.message);
   }
 
-  // 起動時に必ずSheetsを最新コードで同期
+  // 起動時に必ずSheetsを同期（逆同期 → 正同期の順）
   if (isSheetsEnabled()) {
     try {
+      await reverseSyncFromSheets();
       await syncAllData();
       console.log('[STARTUP] Synced all data to Sheets.');
     } catch (e) {
@@ -193,11 +202,12 @@ async function main() {
     runRecruitment(client);
   }, { timezone: 'Asia/Tokyo' });
 
-  // Google Sheets同期: 毎時0分
-  cron.schedule('0 * * * *', () => {
+  // Google Sheets同期: 毎時0分（逆同期 → 正同期）
+  cron.schedule('0 * * * *', async () => {
     if (isSheetsEnabled()) {
-      console.log('[CRON] Syncing to Google Sheets...');
-      syncAllData();
+      console.log('[CRON] Syncing Google Sheets...');
+      await reverseSyncFromSheets();
+      await syncAllData();
     }
   }, { timezone: 'Asia/Tokyo' });
 
