@@ -202,8 +202,8 @@ async function main() {
     runRecruitment(client);
   }, { timezone: 'Asia/Tokyo' });
 
-  // Google Sheets同期: 毎時0分（逆同期 → 正同期）
-  cron.schedule('0 * * * *', async () => {
+  // Google Sheets同期: 2分ごと（逆同期 → 正同期）
+  cron.schedule('*/2 * * * *', async () => {
     if (isSheetsEnabled()) {
       console.log('[CRON] Syncing Google Sheets...');
       await reverseSyncFromSheets();
