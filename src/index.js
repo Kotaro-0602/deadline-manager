@@ -35,6 +35,60 @@ app.get('/webhook', (req, res) => {
   res.status(200).send('OK');
 });
 
+// === 外部cron用エンドポイント ===
+// Render無料プランはスリープで内部cronが発火しないことがあるため、
+// 外部cronサービス（cron-job.org 等）から叩いてリマインド等を実行する。
+// CRON_SECRET 環境変数と ?token=... を照合して認証。
+function checkCronAuth(req, res) {
+  const expected = process.env.CRON_SECRET;
+  if (!expected) {
+    res.status(500).json({ error: 'CRON_SECRET is not configured on server' });
+    return false;
+  }
+  const token = req.query.token || req.headers['x-cron-token'];
+  if (token !== expected) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+app.get('/cron/reminder', async (req, res) => {
+  if (!checkCronAuth(req, res)) return;
+  console.log('[HTTP-CRON] Triggering daily reminder...');
+  try {
+    await runReminder(client);
+    res.json({ status: 'ok', job: 'reminder' });
+  } catch (err) {
+    console.error('[HTTP-CRON] reminder failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/cron/auto-start', async (req, res) => {
+  if (!checkCronAuth(req, res)) return;
+  console.log('[HTTP-CRON] Triggering auto-start check...');
+  try {
+    await runAutoStart(client);
+    res.json({ status: 'ok', job: 'auto-start' });
+  } catch (err) {
+    console.error('[HTTP-CRON] auto-start failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/cron/recruitment', async (req, res) => {
+  if (!checkCronAuth(req, res)) return;
+  console.log('[HTTP-CRON] Triggering recruitment notification...');
+  try {
+    await runRecruitment(client);
+    res.json({ status: 'ok', job: 'recruitment' });
+  } catch (err) {
+    console.error('[HTTP-CRON] recruitment failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // LINE Webhookエンドポイント
 app.post('/webhook', middleware(config), (req, res) => {
   console.log(`[WEBHOOK] Received ${req.body.events.length} event(s)`);
