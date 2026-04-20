@@ -129,10 +129,20 @@ async function handleRegisterProject(client, event, text) {
               `${diffLine('納期', existing.deadline, pEnd)}\n` +
               `${diffLine('備考', existing.note, note)}\n` +
               `─────────────\n\n` +
-              `この内容に変更しますか？\n` +
-              `→「はい」または「変更」で更新\n` +
-              `→「いいえ」でキャンセル\n\n` +
+              `この内容に変更しますか？\n\n` +
               `※ 別案件として登録したい場合は案件名を変えて再登録してください。`,
+            quickReply: {
+              items: [
+                {
+                  type: 'action',
+                  action: { type: 'message', label: 'はい', text: 'はい' },
+                },
+                {
+                  type: 'action',
+                  action: { type: 'message', label: 'いいえ', text: 'いいえ' },
+                },
+              ],
+            },
           }],
         });
       }
