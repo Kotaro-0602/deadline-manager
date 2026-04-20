@@ -476,6 +476,30 @@ function updateProjectFields(projectId, { clientId, startDate, deadline, note })
 }
 
 /**
+ * 案件名を変更
+ */
+function updateProjectTitle(projectId, newTitle) {
+  const db = getDb();
+  return db.prepare(`
+    UPDATE projects
+    SET title = ?, updated_at = datetime('now', 'localtime')
+    WHERE id = ?
+  `).run(newTitle, projectId);
+}
+
+/**
+ * 担当編集者を変更
+ */
+function updateProjectEditor(projectId, newEditorId) {
+  const db = getDb();
+  return db.prepare(`
+    UPDATE projects
+    SET editor_id = ?, updated_at = datetime('now', 'localtime')
+    WHERE id = ?
+  `).run(newEditorId, projectId);
+}
+
+/**
  * 編集者を名前で削除（statusをinactiveに変更）
  * @returns {object|null} 削除した編集者情報、見つからなければnull
  */
@@ -572,6 +596,8 @@ module.exports = {
   countProjectsByTitleAndEditor,
   getActiveProjectByTitleAndEditor,
   updateProjectFields,
+  updateProjectTitle,
+  updateProjectEditor,
   deactivateEditorByName,
   deactivateClientByName,
   getEditorDeliveryStats,

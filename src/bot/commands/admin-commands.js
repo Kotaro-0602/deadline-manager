@@ -240,6 +240,115 @@ async function handleAdminCommand(client, event, command, text = '') {
       });
     }
 
+    case 'rename_project': {
+      // 「案件名変更 旧案件名/編集者/新案件名」形式
+      const match = text.match(/^案件名変更[\s　]+(.+?)[\s　]*\/[\s　]*(.+?)[\s　]*\/[\s　]*(.+)$/);
+      if (!match) {
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: '⚠️ 入力形式が正しくありません。\n\n案件名変更 旧案件名/編集者/新案件名\n\n例: 案件名変更 安さにうんざり/川口美由紀/安さにうんざり（続編）',
+          }],
+        });
+      }
+      const oldTitle = match[1].trim();
+      const editorName = match[2].trim();
+      const newTitle = match[3].trim();
+
+      const existing = queries.getActiveProjectByTitleAndEditor(oldTitle, editorName);
+      if (!existing) {
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: `⚠️ 案件「${oldTitle}」（編集者: ${editorName}）が見つかりません。`,
+          }],
+        });
+      }
+
+      // 同じ編集者に同名の別案件が既にあれば拒否
+      const conflict = queries.getActiveProjectByTitleAndEditor(newTitle, editorName);
+      if (conflict && conflict.id !== existing.id) {
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: `⚠️ 「${newTitle}」（編集者: ${editorName}）は既に別案件として登録されています。`,
+          }],
+        });
+      }
+
+      queries.updateProjectTitle(existing.id, newTitle);
+      return client.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: `🔄 案件名を変更しました。\n─────────────\n旧: ${oldTitle}\n新: ${newTitle}\n編集者: ${editorName}\n─────────────`,
+        }],
+      });
+    }
+
+    case 'reassign_editor': {
+      // 「担当者変更 案件名/旧編集者/新編集者」形式
+      const match = text.match(/^担当者変更[\s　]+(.+?)[\s　]*\/[\s　]*(.+?)[\s　]*\/[\s　]*(.+)$/);
+      if (!match) {
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: '⚠️ 入力形式が正しくありません。\n\n担当者変更 案件名/旧編集者/新編集者\n\n例: 担当者変更 安さにうんざり/川口美由紀/高須賀綾',
+          }],
+        });
+      }
+      const title = match[1].trim();
+      const oldEditorName = match[2].trim();
+      const newEditorName = match[3].trim();
+
+      const existing = queries.getActiveProjectByTitleAndEditor(title, oldEditorName);
+      if (!existing) {
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: `⚠️ 案件「${title}」（編集者: ${oldEditorName}）が見つかりません。`,
+          }],
+        });
+      }
+
+      const newEditor = queries.getEditorByName(newEditorName);
+      if (!newEditor) {
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: `⚠️ 新しい編集者「${newEditorName}」が未登録です。\n最初に「編集者連携 ${newEditorName}」を実行してください。`,
+          }],
+        });
+      }
+
+      // 新担当者に同名案件が既にあれば拒否
+      const conflict = queries.getActiveProjectByTitleAndEditor(title, newEditorName);
+      if (conflict && conflict.id !== existing.id) {
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: `⚠️ 「${title}」は既に「${newEditorName}」の案件として登録されています。`,
+          }],
+        });
+      }
+
+      queries.updateProjectEditor(existing.id, newEditor.id);
+      return client.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: `🔄 担当編集者を変更しました。\n─────────────\n案件名: ${title}\n旧: ${oldEditorName}\n新: ${newEditorName}\n─────────────`,
+        }],
+      });
+    }
+
     case 'delete_client': {
       // 「発注者削除 名前」形式
       const match = text.match(/^発注者削除[\s　]+(.+)$/);
