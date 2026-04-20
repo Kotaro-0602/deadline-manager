@@ -24,7 +24,7 @@ async function handleClientCommand(client, event, command, text = '') {
   switch (command) {
     // 発注者LINE連携（自動登録対応）
     case 'link': {
-      const match = text.match(/^発注者連携[  ](.+)$/);
+      const match = text.match(/^発注者連携[\s　]+(.+)$/);
       if (!match) {
         return client.replyMessage({
           replyToken,

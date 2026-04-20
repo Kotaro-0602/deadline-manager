@@ -7,7 +7,7 @@ async function handleEditorCommand(client, event, command, text = '') {
 
   switch (command) {
     case 'link': {
-      const match = text.match(/^(?:LINE連携|編集者連携)[  ](.+)$/);
+      const match = text.match(/^(?:LINE連携|編集者連携)[\s　]+(.+)$/);
       if (!match) {
         return client.replyMessage({
           replyToken,

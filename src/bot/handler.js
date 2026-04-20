@@ -151,13 +151,21 @@ async function handleHashtagStatus(client, event, rawText) {
   const replyToken = event.replyToken;
   const userId = event.source.userId;
 
-  // ハッシュタグを全て抽出（# と ＃ 両方対応）
+  // ステータスタグ（#初稿 / #修正N / #納品）を含む「最初の行」のみを解析対象にする。
+  // 本文に「修正ありましたら15日…」のような文言があっても誤検出しないよう、
+  // 文脈（行）の区切りで「提出ステータス + 案件名」だけを読み取る。
+  const statusLinePattern = /[#＃](?:初稿|納品|修正\D*\d+)/;
+  const lines = rawText.split(/\r?\n/);
+  const statusLine = lines.find(line => statusLinePattern.test(line));
+  if (!statusLine) return null;
+
+  // ハッシュタグを抽出（# と ＃ 両方対応）
   // スペースを含む案件名に対応: #タグ1 の後、次の # または行末までをタグ値とする
   // 例: "#納品 #Claude Code解説__ねねさん" → ['納品', 'Claude Code解説__ねねさん']
   const tagNames = [];
   const tagRegex = /[#＃]([^#＃@＠]+)/g;
   let match;
-  while ((match = tagRegex.exec(rawText)) !== null) {
+  while ((match = tagRegex.exec(statusLine)) !== null) {
     const value = match[1].trim();
     if (value) tagNames.push(value);
   }
