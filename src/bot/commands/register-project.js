@@ -81,6 +81,20 @@ async function handleRegisterProject(client, event, text) {
         }],
       });
     }
+
+    // --- 重複登録チェック: 同じ案件名×編集者の未完了案件が既にある場合は登録せず案内 ---
+    const existing = queries.getActiveProjectByTitleAndEditor(title, editorName);
+    if (existing) {
+      const noteSuffix = note ? `/${note}` : '';
+      const updateCmd = `案件更新 ${title}/${editorName}/${clientName}/${startDate}/${deadline}${noteSuffix}`;
+      return client.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: `⚠️ 同じ案件が既に登録されています\n─────────────\n案件名: ${existing.title}\n編集者: ${existing.editor_name}\n発注者: ${existing.client_name || 'なし'}\n着手日: ${existing.start_date || '-'}\n納期: ${existing.deadline || '-'}\n備考: ${existing.note || 'なし'}\n─────────────\n\n🔄 登録内容を更新する場合:\n${updateCmd}\n\n※ 別案件として登録したい場合は案件名を変えてください。`,
+        }],
+      });
+    }
   }
 
   // --- 発注者の取得 or 自動登録 ---

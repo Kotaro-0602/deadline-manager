@@ -1,5 +1,30 @@
+const dayjs = require('dayjs');
 const queries = require('../../db/queries');
 const templates = require('../templates');
+
+// 柔軟な日付パース（register-project.js と同じ仕様）
+function parseDate(raw) {
+  if (!raw) return null;
+  const normalized = raw.replace(/\//g, '-');
+  if (normalized.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
+    const parsed = dayjs(normalized);
+    if (parsed.isValid()) return parsed.format('YYYY-MM-DD');
+  }
+  const shortMatch = raw.match(/^(\d{1,2})[-/](\d{1,2})$/);
+  if (shortMatch) {
+    const month = parseInt(shortMatch[1], 10);
+    const day = parseInt(shortMatch[2], 10);
+    const year = dayjs().year();
+    const parsed = dayjs(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+    if (parsed.isValid()) {
+      if (parsed.isBefore(dayjs(), 'day')) {
+        return parsed.add(1, 'year').format('YYYY-MM-DD');
+      }
+      return parsed.format('YYYY-MM-DD');
+    }
+  }
+  return null;
+}
 
 async function handleAdminCommand(client, event, command, text = '') {
   const replyToken = event.replyToken;
@@ -135,6 +160,82 @@ async function handleAdminCommand(client, event, command, text = '') {
         messages: [{
           type: 'text',
           text: `🗑️ 編集者「${name}」を削除しました。\n（LINE連携も解除されました）`,
+        }],
+      });
+    }
+
+    case 'update_project': {
+      // 「案件更新 案件名/編集者/発注者/着手日/納期(/備考)」形式
+      const body = text.replace(/^案件更新[\s　/]+/, '').replace(/\/+$/, '');
+      const normalized = body.replace(/／/g, '/').replace(/[\s　]*\/[\s　]*/g, '/');
+
+      const dYMD = '\\d{4}-\\d{1,2}-\\d{1,2}';
+      const dYSD = '\\d{4}\\/\\d{1,2}\\/\\d{1,2}';
+      const dSD = '\\d{1,2}\\/\\d{1,2}';
+      const dHD = '\\d{1,2}-\\d{1,2}';
+      const datePattern = `(?:${dYMD}|${dYSD}|${dSD}|${dHD})`;
+      const regex = new RegExp(`^(.+?)\\/(.*?)\\/(.+?)\\/(${datePattern})\\/(${datePattern})(?:\\/(.+))?$`);
+      const m = normalized.match(regex);
+
+      if (!m) {
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: '⚠️ 入力形式が正しくありません。\n\n案件更新 案件名/編集者/発注者/着手日/納期\n（備考を変更する場合）案件更新 案件名/編集者/発注者/着手日/納期/備考\n\n例: 案件更新 安さにうんざり/川口美由紀/村上幸太朗/2026-04-20/2026-04-23',
+          }],
+        });
+      }
+
+      const title = m[1].trim();
+      const editorName = m[2].trim();
+      const clientName = m[3].trim();
+      const startDateRaw = m[4].trim();
+      const deadlineRaw = m[5].trim();
+      const note = m[6] ? m[6].trim() : null;
+
+      const startDate = parseDate(startDateRaw);
+      const deadline = parseDate(deadlineRaw);
+      if (!startDate || !deadline) {
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: '⚠️ 着手日または納期の形式が不正です。\n\n対応形式: 2026-04-20 / 2026/04/20 / 4-20 / 4/20',
+          }],
+        });
+      }
+
+      const existing = queries.getActiveProjectByTitleAndEditor(title, editorName);
+      if (!existing) {
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: `⚠️ 案件「${title}」（編集者: ${editorName}）が見つかりません。\n\n※ 完了済みの案件は更新できません。\n※ 新規登録の場合は「案件登録」を使ってください。`,
+          }],
+        });
+      }
+
+      // 発注者の取得 or 自動登録
+      let clientRecord = queries.getClientByName(clientName);
+      if (!clientRecord) {
+        queries.createClient(clientName);
+        clientRecord = queries.getClientByName(clientName);
+      }
+
+      queries.updateProjectFields(existing.id, {
+        clientId: clientRecord.id,
+        startDate,
+        deadline,
+        note,
+      });
+
+      return client.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: `🔄 案件を更新しました。\n─────────────\n案件名: ${title}\n編集者: ${editorName}\n発注者: ${clientName}\n着手日: ${startDate}\n納期: ${deadline}\n備考: ${note || 'なし'}\n─────────────`,
         }],
       });
     }

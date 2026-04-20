@@ -65,6 +65,12 @@ async function handleMessage(client, event) {
     return result;
   }
 
+  if (text === '案件更新' || text.startsWith('案件更新 ') || text.startsWith('案件更新　') || text.startsWith('案件更新/')) {
+    const result = await handleAdminCommand(client, event, 'update_project', text);
+    triggerSync();
+    return result;
+  }
+
   if (text === '編集者削除' || text.startsWith('編集者削除 ') || text.startsWith('編集者削除　')) {
     const result = await handleAdminCommand(client, event, 'delete_editor', text);
     triggerSync();

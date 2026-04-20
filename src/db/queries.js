@@ -448,6 +448,34 @@ function countProjectsByTitleAndEditor(title, editorName) {
 }
 
 /**
+ * 未完了の同名×同編集者の案件を1件取得（重複登録チェック/更新用）
+ */
+function getActiveProjectByTitleAndEditor(title, editorName) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT p.*, e.name as editor_name, c.name as client_name
+    FROM projects p
+    LEFT JOIN editors e ON p.editor_id = e.id
+    LEFT JOIN clients c ON p.client_id = c.id
+    WHERE p.title = ? AND e.name = ? AND p.status != 'completed'
+    ORDER BY p.id ASC
+  `).get(title, editorName);
+}
+
+/**
+ * 案件の発注者・着手日・納期・備考を更新
+ */
+function updateProjectFields(projectId, { clientId, startDate, deadline, note }) {
+  const db = getDb();
+  return db.prepare(`
+    UPDATE projects
+    SET client_id = ?, start_date = ?, deadline = ?, note = ?,
+        updated_at = datetime('now', 'localtime')
+    WHERE id = ?
+  `).run(clientId, startDate, deadline, note, projectId);
+}
+
+/**
  * 編集者を名前で削除（statusをinactiveに変更）
  * @returns {object|null} 削除した編集者情報、見つからなければnull
  */
@@ -542,6 +570,8 @@ module.exports = {
   getFirstDraftReminderProjects,
   deleteProjectByTitleAndEditor,
   countProjectsByTitleAndEditor,
+  getActiveProjectByTitleAndEditor,
+  updateProjectFields,
   deactivateEditorByName,
   deactivateClientByName,
   getEditorDeliveryStats,
