@@ -1,0 +1,38 @@
+name: Daily Cron Jobs
+
+on:
+  schedule:
+    - cron: '0 23 * * *'  # 8:00 JST - 自動着手
+    - cron: '0 0 * * *'   # 9:00 JST - リマインド
+  workflow_dispatch:
+
+jobs:
+  auto-start:
+    if: github.event.schedule == '0 23 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger auto-start (8:00 JST)
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "x-cron-token: ${{ secrets.CRON_SECRET }}" \
+            "https://deadline-manager.onrender.com/cron/auto-start")
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+          echo "Status: $STATUS"
+          echo "Body: $BODY"
+          if [ "$STATUS" != "200" ]; then exit 1; fi
+
+  reminder:
+    if: github.event.schedule == '0 0 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminder (9:00 JST)
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "x-cron-token: ${{ secrets.CRON_SECRET }}" \
+            "https://deadline-manager.onrender.com/cron/reminder")
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+          echo "Status: $STATUS"
+          echo "Body: $BODY"
+          if [ "$STATUS" != "200" ]; then exit 1; fi
