@@ -413,19 +413,38 @@ function getUnassignedProjects(daysOld = 2) {
  * 案件名＋編集者名で未完了案件を特定して削除
  * @returns {object|null} 削除した案件情報、見つからなければnull
  */
-function deleteProjectByTitleAndEditor(title, editorName) {
+function deleteProjectByTitleAndEditor(title, editorName, clientName = null) {
   const db = getDb();
-  const project = db.prepare(`
+  let sql = `
     SELECT p.*, e.name as editor_name, c.name as client_name
     FROM projects p
     LEFT JOIN editors e ON p.editor_id = e.id
     LEFT JOIN clients c ON p.client_id = c.id
     WHERE p.title = ? AND e.name = ? AND p.status != 'completed'
-  `).get(title, editorName);
+  `;
+  const params = [title, editorName];
+  if (clientName) {
+    sql += ' AND c.name = ?';
+    params.push(clientName);
+  }
+  const project = db.prepare(sql).get(...params);
   if (!project) return null;
   db.prepare('DELETE FROM reminder_logs WHERE project_id = ?').run(project.id);
   db.prepare('DELETE FROM projects WHERE id = ?').run(project.id);
   return project;
+}
+
+/**
+ * 同じ案件名×編集者の案件が複数あるか確認
+ */
+function countProjectsByTitleAndEditor(title, editorName) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT COUNT(*) as cnt
+    FROM projects p
+    LEFT JOIN editors e ON p.editor_id = e.id
+    WHERE p.title = ? AND e.name = ? AND p.status != 'completed'
+  `).get(title, editorName).cnt;
 }
 
 /**
@@ -522,6 +541,7 @@ module.exports = {
   getProjectsDueSoon,
   getFirstDraftReminderProjects,
   deleteProjectByTitleAndEditor,
+  countProjectsByTitleAndEditor,
   deactivateEditorByName,
   deactivateClientByName,
   getEditorDeliveryStats,

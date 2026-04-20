@@ -39,28 +39,45 @@ async function handleAdminCommand(client, event, command, text = '') {
     }
 
     case 'delete_project': {
-      // 「案件削除 案件名/編集者名」形式
-      const match = text.match(/^案件削除[\s　]+(.+?)[\s　]*\/[\s　]*(.+)$/);
+      // 「案件削除 案件名/編集者名」または「案件削除 案件名/編集者名/発注者名」形式
+      const match = text.match(/^案件削除[\s　]+(.+?)[\s　]*\/[\s　]*(.+?)(?:[\s　]*\/[\s　]*(.+))?$/);
       if (!match) {
         return client.replyMessage({
           replyToken,
           messages: [{
             type: 'text',
-            text: '⚠️ 案件名と編集者名を指定してください。\n\n案件削除 案件名/編集者名\n\n例: 案件削除 Claude Code解説＿ねねさん/高須賀綾',
+            text: '⚠️ 案件名と編集者名を指定してください。\n\n案件削除 案件名/編集者名\n（重複がある場合）案件削除 案件名/編集者名/発注者名\n\n例: 案件削除 Claude Code解説＿ねねさん/高須賀綾',
           }],
         });
       }
 
       const projectTitle = match[1].trim();
       const editorName = match[2].trim();
-      const deleted = queries.deleteProjectByTitleAndEditor(projectTitle, editorName);
+      const clientName = match[3] ? match[3].trim() : null;
+
+      // 発注者指定なしで複数件ヒットする場合は、絞り込みを要求
+      if (!clientName) {
+        const count = queries.countProjectsByTitleAndEditor(projectTitle, editorName);
+        if (count > 1) {
+          return client.replyMessage({
+            replyToken,
+            messages: [{
+              type: 'text',
+              text: `⚠️ 「${projectTitle}」（編集者: ${editorName}）の案件が${count}件あります。\n発注者名も指定して再実行してください。\n\n案件削除 案件名/編集者名/発注者名`,
+            }],
+          });
+        }
+      }
+
+      const deleted = queries.deleteProjectByTitleAndEditor(projectTitle, editorName, clientName);
 
       if (!deleted) {
+        const target = clientName ? `（編集者: ${editorName} / 発注者: ${clientName}）` : `（編集者: ${editorName}）`;
         return client.replyMessage({
           replyToken,
           messages: [{
             type: 'text',
-            text: `⚠️ 案件「${projectTitle}」（編集者: ${editorName}）が見つかりません。\n\n※ 完了済みの案件は削除できません。\n※ 案件名・編集者名が正確か確認してください。`,
+            text: `⚠️ 案件「${projectTitle}」${target}が見つかりません。\n\n※ 完了済みの案件は削除できません。\n※ 案件名・編集者名・発注者名が正確か確認してください。`,
           }],
         });
       }
