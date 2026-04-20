@@ -122,6 +122,57 @@ async function handleAdminCommand(client, event, command, text = '') {
       });
     }
 
+    case 'delete_client': {
+      // 「発注者削除 名前」形式
+      const match = text.match(/^発注者削除[\s　]+(.+)$/);
+      if (!match) {
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: '⚠️ 発注者名を指定してください。\n\n発注者削除 名前\n\n例: 発注者削除 山田',
+          }],
+        });
+      }
+
+      const name = match[1].trim();
+
+      // 未完了案件があるか確認
+      const targetClient = queries.getClientByName(name);
+      if (targetClient) {
+        const activeProjects = queries.getProjectsByClientId(targetClient.id);
+        if (activeProjects.length > 0) {
+          const list = activeProjects.map(p => `・${p.title}`).join('\n');
+          return client.replyMessage({
+            replyToken,
+            messages: [{
+              type: 'text',
+              text: `⚠️ 「${name}」には未完了の案件があるため削除できません。\n\n${list}\n\n先に案件削除してください。`,
+            }],
+          });
+        }
+      }
+
+      const deleted = queries.deactivateClientByName(name);
+      if (!deleted) {
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: `⚠️ 発注者「${name}」が見つかりません。`,
+          }],
+        });
+      }
+
+      return client.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: `🗑️ 発注者「${name}」を削除しました。\n（LINE連携も解除されました）`,
+        }],
+      });
+    }
+
     case 'register_editor': {
       // 「編集者登録 名前」形式
       const match = text.match(/^編集者登録\s+(.+)$/);

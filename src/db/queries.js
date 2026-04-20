@@ -441,6 +441,18 @@ function deactivateEditorByName(name) {
 }
 
 /**
+ * 発注者を名前で削除（statusをinactiveに変更）
+ * @returns {object|null} 削除した発注者情報、見つからなければnull
+ */
+function deactivateClientByName(name) {
+  const db = getDb();
+  const client = db.prepare('SELECT * FROM clients WHERE name = ? AND status = ?').get(name, 'active');
+  if (!client) return null;
+  db.prepare("UPDATE clients SET status = 'inactive', line_user_id = NULL WHERE id = ?").run(client.id);
+  return client;
+}
+
+/**
  * 初稿提出リマインド対象の案件を取得
  * 条件: 初稿未提出、納期の2日前（deadline - 2日 = 今日）
  */
@@ -511,6 +523,7 @@ module.exports = {
   getFirstDraftReminderProjects,
   deleteProjectByTitleAndEditor,
   deactivateEditorByName,
+  deactivateClientByName,
   getEditorDeliveryStats,
 };
 

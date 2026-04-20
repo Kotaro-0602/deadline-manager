@@ -71,6 +71,12 @@ async function handleMessage(client, event) {
     return result;
   }
 
+  if (text === '発注者削除' || text.startsWith('発注者削除 ') || text.startsWith('発注者削除　')) {
+    const result = await handleAdminCommand(client, event, 'delete_client', text);
+    triggerSync();
+    return result;
+  }
+
   // 編集者LINE連携
   if (text.startsWith('LINE連携 ') || text.startsWith('LINE連携　') ||
       text.startsWith('編集者連携 ') || text.startsWith('編集者連携　')) {
