@@ -1,6 +1,7 @@
 const dayjs = require('dayjs');
 const queries = require('../../db/queries');
 const templates = require('../templates');
+const session = require('../session');
 
 /**
  * 一括入力形式で案件登録
@@ -82,18 +83,59 @@ async function handleRegisterProject(client, event, text) {
       });
     }
 
-    // --- 重複登録チェック: 同じ案件名×編集者の未完了案件が既にある場合は登録せず案内 ---
+    // --- 重複登録チェック: 同じ案件名×編集者の未完了案件が既にある場合は
+    //     登録せず「変更しますか？」の確認ダイアログに切り替える
     const existing = queries.getActiveProjectByTitleAndEditor(title, editorName);
     if (existing) {
-      const noteSuffix = note ? `/${note}` : '';
-      const updateCmd = `案件更新 ${title}/${editorName}/${clientName}/${startDate}/${deadline}${noteSuffix}`;
-      return client.replyMessage({
-        replyToken,
-        messages: [{
-          type: 'text',
-          text: `⚠️ 同じ案件が既に登録されています\n─────────────\n案件名: ${existing.title}\n編集者: ${existing.editor_name}\n発注者: ${existing.client_name || 'なし'}\n着手日: ${existing.start_date || '-'}\n納期: ${existing.deadline || '-'}\n備考: ${existing.note || 'なし'}\n─────────────\n\n🔄 登録内容を更新する場合:\n${updateCmd}\n\n※ 別案件として登録したい場合は案件名を変えてください。`,
-        }],
-      });
+      const groupId = event.source.groupId || event.source.roomId || null;
+      // 事前に日付パースを先取り（保留内容に保存するため）
+      const pStart = parseDeadline(startDate);
+      const pEnd = parseDeadline(deadline);
+      // ここまで来ている時点で parsedStartDate/parsedDeadline が有効なことは確認済みだが保険
+      if (!pStart || !pEnd) {
+        // 通常フローで弾かれるはずなので基本到達しない
+      } else {
+        session.setSession(userId, groupId, {
+          type: 'update_project_confirm',
+          projectId: existing.id,
+          title,
+          editorName,
+          clientName,
+          startDate: pStart,
+          deadline: pEnd,
+          note: note || null,
+        });
+
+        // 差分を強調表示
+        const diffLine = (label, oldV, newV) => {
+          const same = (oldV || '') === (newV || '');
+          const mark = same ? '' : ' ← 変更';
+          return `${label}: ${newV || 'なし'}${mark}`;
+        };
+
+        return client.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text:
+              `⚠️ 同じ案件が既に登録されています\n` +
+              `─────────────\n` +
+              `案件名: ${existing.title}\n` +
+              `編集者: ${existing.editor_name}\n` +
+              `─────────────\n` +
+              `【新しい内容】\n` +
+              `${diffLine('発注者', existing.client_name, clientName)}\n` +
+              `${diffLine('着手日', existing.start_date, pStart)}\n` +
+              `${diffLine('納期', existing.deadline, pEnd)}\n` +
+              `${diffLine('備考', existing.note, note)}\n` +
+              `─────────────\n\n` +
+              `この内容に変更しますか？\n` +
+              `→「はい」または「変更」で更新\n` +
+              `→「いいえ」でキャンセル\n\n` +
+              `※ 別案件として登録したい場合は案件名を変えて再登録してください。`,
+          }],
+        });
+      }
     }
   }
 

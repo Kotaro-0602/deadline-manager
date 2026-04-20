@@ -7,6 +7,7 @@ const { helpMessage, withMention, withInlineMention } = require('./templates');
 const { syncAllData, isEnabled: isSheetsEnabled } = require('../sheets/sync');
 const { triggerBackup } = require('../db/backup');
 const queries = require('../db/queries');
+const session = require('./session');
 
 // データ変更後にスプレッドシートを非同期で同期 + バックアップ
 function triggerSync() {
@@ -32,6 +33,48 @@ async function handleMessage(client, event) {
 
   if (groupId) {
     console.log(`[GROUP] Message from group/room: ${groupId}`);
+  }
+
+  // --- 確認セッション（案件更新の「はい/いいえ」）を最優先で処理 ---
+  const pending = session.getSession(userId, groupId);
+  if (pending && pending.type === 'update_project_confirm') {
+    const affirmative = /^(はい|変更|変更する|更新|更新する|ok|yes)$/i.test(text);
+    const negative = /^(いいえ|キャンセル|やめる|中止|no)$/i.test(text);
+
+    if (affirmative) {
+      // 発注者の取得 or 自動登録
+      let clientRecord = queries.getClientByName(pending.clientName);
+      if (!clientRecord) {
+        queries.createClient(pending.clientName);
+        clientRecord = queries.getClientByName(pending.clientName);
+      }
+      queries.updateProjectFields(pending.projectId, {
+        clientId: clientRecord.id,
+        startDate: pending.startDate,
+        deadline: pending.deadline,
+        note: pending.note,
+      });
+      session.clearSession(userId, groupId);
+      triggerSync();
+      return client.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: `🔄 案件を更新しました。\n─────────────\n案件名: ${pending.title}\n編集者: ${pending.editorName}\n発注者: ${pending.clientName}\n着手日: ${pending.startDate}\n納期: ${pending.deadline}\n備考: ${pending.note || 'なし'}\n─────────────`,
+        }],
+      });
+    }
+
+    if (negative) {
+      session.clearSession(userId, groupId);
+      return client.replyMessage({
+        replyToken,
+        messages: [{ type: 'text', text: '❎ 変更をキャンセルしました。' }],
+      });
+    }
+
+    // 「はい/いいえ」以外が来たら自動キャンセルして通常のコマンド処理へ
+    session.clearSession(userId, groupId);
   }
 
   // コマンドルーティング
