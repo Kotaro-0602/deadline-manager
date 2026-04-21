@@ -3,6 +3,32 @@ const { reminderMessage, withMention } = require('../bot/templates');
 const { triggerBackup } = require('../db/backup');
 const dayjs = require('dayjs');
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * LINE push送信。レート制限(429)に遭遇したら指数バックオフでリトライ。
+ */
+async function pushWithRetry(client, params, context) {
+  const delays = [1500, 4000, 8000]; // 最大3回リトライ
+  let lastErr;
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      await client.pushMessage(params);
+      return true;
+    } catch (err) {
+      lastErr = err;
+      const status = err.statusCode || err.status || (err.originalError && err.originalError.response && err.originalError.response.status);
+      if (status !== 429 || attempt === delays.length) {
+        throw err;
+      }
+      const waitMs = delays[attempt];
+      console.warn(`[REMINDER] 429 hit for ${context}, retrying in ${waitMs}ms (attempt ${attempt + 1})`);
+      await sleep(waitMs);
+    }
+  }
+  throw lastErr;
+}
+
 async function runReminder(client) {
   const groupId = process.env.AD_TEAM_GROUP_ID;
   if (!groupId) {
@@ -27,11 +53,12 @@ async function runReminder(client) {
 
         if (project.editor_line_id) {
           const msg = withMention(text, project.editor_name, project.editor_line_id);
-          await client.pushMessage({ to: groupId, messages: [msg] });
+          await pushWithRetry(client, { to: groupId, messages: [msg] }, `project #${project.id}`);
         } else {
           text += `担当: ${project.editor_name || '未定'}\n`;
-          await client.pushMessage({ to: groupId, messages: [{ type: 'text', text }] });
+          await pushWithRetry(client, { to: groupId, messages: [{ type: 'text', text }] }, `project #${project.id}`);
         }
+        await sleep(500);
         queries.createReminderLog(project.id, logType);
         console.log(`[REMINDER] ${daysAhead}day reminder sent for project #${project.id} to group`);
       } catch (err) {
@@ -80,11 +107,12 @@ async function runReminder(client) {
 
       if (project.editor_line_id) {
         const msg = withMention(text, project.editor_name, project.editor_line_id);
-        await client.pushMessage({ to: groupId, messages: [msg] });
+        await pushWithRetry(client, { to: groupId, messages: [msg] }, `project #${project.id}`);
       } else {
         text += `\n担当: ${project.editor_name || '未定'}`;
-        await client.pushMessage({ to: groupId, messages: [{ type: 'text', text }] });
+        await pushWithRetry(client, { to: groupId, messages: [{ type: 'text', text }] }, `project #${project.id}`);
       }
+      await sleep(500);
       queries.createReminderLog(project.id, 'first_draft_reminder');
       console.log(`[REMINDER] First draft reminder sent for project #${project.id}`);
     } catch (err) {
@@ -109,11 +137,12 @@ async function runReminder(client) {
 
       if (project.editor_line_id) {
         const msg = withMention(text, project.editor_name, project.editor_line_id);
-        await client.pushMessage({ to: groupId, messages: [msg] });
+        await pushWithRetry(client, { to: groupId, messages: [msg] }, `project #${project.id}`);
       } else {
         text += `担当: ${project.editor_name || '未定'}\n`;
-        await client.pushMessage({ to: groupId, messages: [{ type: 'text', text }] });
+        await pushWithRetry(client, { to: groupId, messages: [{ type: 'text', text }] }, `project #${project.id}`);
       }
+      await sleep(500);
       queries.createReminderLog(project.id, 'overdue');
       console.log(`[REMINDER] Overdue reminder sent for project #${project.id} to group`);
     } catch (err) {
